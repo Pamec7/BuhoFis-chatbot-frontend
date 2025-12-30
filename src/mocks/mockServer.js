@@ -79,7 +79,7 @@ export function enableMockApi() {
     // -------------------------
     // GET /navigation
     // -------------------------
-    if (u.endsWith("/navigation") && method === "GET") {
+    if (u.includes("/navigation") && method === "GET") {
       return jsonResponse({
         level: 0,
         options: FLOW_TREE.options,
@@ -90,7 +90,7 @@ export function enableMockApi() {
     // POST /navigation/next
     // Body: { path: [...] }
     // -------------------------
-    if (u.endsWith("/navigation/next") && method === "POST") {
+    if (u.includes("/navigation/next") && method === "POST") {
       try {
         const body = options.body ? JSON.parse(options.body) : {};
         const path = Array.isArray(body.path) ? body.path : [];
