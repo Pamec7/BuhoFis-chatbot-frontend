@@ -6,40 +6,42 @@ import { getNavigationRoot, getNavigationNext } from "../Services/navigationServ
 const ChatContext = createContext();
 const STORAGE_KEY = "fiswize_chat_data";
 
-// ✅ sessionStorage (se borra al cerrar pestaña)
 const loadFromSessionStorage = () => {
   try {
     const savedData = sessionStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-      const parsed = JSON.parse(savedData);
-      const chatsWithDates = parsed.chats.map((chat) => ({
+    if (!savedData) return null;
+
+    const parsed = JSON.parse(savedData);
+    return {
+      chats: parsed.chats.map((chat) => ({
         ...chat,
         createdAt: new Date(chat.createdAt),
-        messages: chat.messages.map((msg) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp),
+        messages: chat.messages.map((m) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
         })),
-      }));
-      return { chats: chatsWithDates, activeChat: parsed.activeChat };
-    }
-  } catch (error) {
-    console.error("Error al cargar desde sessionStorage:", error);
+      })),
+      activeChat: parsed.activeChat,
+    };
+  } catch {
+    return null;
   }
-  return null;
 };
 
 export function ChatProvider({ children }) {
   const savedData = loadFromSessionStorage();
 
   const [chats, setChats] = useState(
-    savedData?.chats || [{ id: 1, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true }]
+    savedData?.chats || [
+      { id: 1, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true },
+    ]
   );
   const [activeChat, setActiveChat] = useState(savedData?.activeChat || 1);
-  const [isTyping, setIsTyping] = useState(false);
-  const [inputValue, setInputValue] = useState("");
 
-  // ---- FLUJOS ----
-  const [flowPath, setFlowPath] = useState(null); // null = no estamos en flujo
+  const [inputValue, setInputValue] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+
+  const [flowPath, setFlowPath] = useState(null);
   const [flowOptions, setFlowOptions] = useState([]);
   const [flowTitle, setFlowTitle] = useState("Opciones guiadas");
   const [isFlowLoading, setIsFlowLoading] = useState(false);
@@ -47,91 +49,72 @@ export function ChatProvider({ children }) {
   const currentChat = chats.find((c) => c.id === activeChat);
   const messages = currentChat?.messages || [];
 
-  // Persistencia
   useEffect(() => {
-    try {
-      const dataToSave = {
-        chats: chats.map((chat) => ({
-          ...chat,
-          createdAt: chat.createdAt.toISOString(),
-          messages: chat.messages.map((msg) => ({
-            ...msg,
-            timestamp: msg.timestamp.toISOString(),
-          })),
+    const data = {
+      chats: chats.map((c) => ({
+        ...c,
+        createdAt: c.createdAt.toISOString(),
+        messages: c.messages.map((m) => ({
+          ...m,
+          timestamp: m.timestamp.toISOString(),
         })),
-        activeChat,
-      };
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    } catch (error) {
-      console.error("Error al guardar en sessionStorage:", error);
-    }
+      })),
+      activeChat,
+    };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [chats, activeChat]);
 
   const addMessage = useCallback(
     (message) => {
       setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === activeChat
-            ? {
-                ...chat,
-                messages: [...chat.messages, message],
-                name:
-                  chat.messages.length === 0 && message.type === MESSAGE_TYPES.USER
-                    ? message.content.slice(0, 30) + (message.content.length > 30 ? "..." : "")
-                    : chat.name,
-              }
-            : chat
-        )
+        prev.map((chat) => {
+          if (chat.id !== activeChat) return chat;
+
+          const isDefaultName = chat.name === "Nueva conversación";
+          const userCount = chat.messages.filter((m) => m.type === MESSAGE_TYPES.USER).length;
+
+          const shouldRename =
+            isDefaultName && message.type === MESSAGE_TYPES.USER && userCount === 0;
+
+          return {
+            ...chat,
+            messages: [...chat.messages, message],
+            name: shouldRename
+              ? message.content.slice(0, 30) + (message.content.length > 30 ? "..." : "")
+              : chat.name,
+          };
+        })
       );
     },
     [activeChat]
   );
 
-  // ========== FLUJOS ==========
   const startFlow = useCallback(async () => {
-    if (isFlowLoading) return;
-
     setIsFlowLoading(true);
     setIsTyping(true);
 
     try {
-      const root = await getNavigationRoot(); // { level, options }
+      const root = await getNavigationRoot();
       setFlowTitle("Opciones guiadas");
       setFlowOptions(root.options || []);
-      setFlowPath([]); // estamos en flujo
+      setFlowPath([]);
 
-      // ✅ Mensaje natural (sin “selecciona arriba”)
       addMessage({
         id: Date.now(),
         type: MESSAGE_TYPES.BOT,
-        content: "Perfecto 😊 Elige una opción:",
+        content: "Selecciona una opción para continuar.",
         timestamp: new Date(),
-        mode: "flow",
       });
-    } catch (error) {
-      console.error(error);
-      addMessage({
-        id: Date.now(),
-        type: MESSAGE_TYPES.BOT,
-        content: "No pude cargar las opciones guiadas. Revisa el servidor o intenta de nuevo.",
-        timestamp: new Date(),
-        isError: true,
-      });
-
-      setFlowTitle("Opciones guiadas");
-      setFlowOptions([]);
-      setFlowPath(null);
     } finally {
       setIsFlowLoading(false);
       setIsTyping(false);
     }
-  }, [addMessage, isFlowLoading]);
+  }, [addMessage]);
 
   const pickFlowOption = useCallback(
     async (optionId, optionLabel) => {
       if (isFlowLoading) return;
 
-      // mostrar selección del usuario
       addMessage({
         id: Date.now(),
         type: MESSAGE_TYPES.USER,
@@ -147,43 +130,20 @@ export function ChatProvider({ children }) {
         const node = await getNavigationNext(newPath);
 
         setFlowTitle(node.title || "Opciones guiadas");
+        setFlowPath(newPath);
 
         if (node.type === "answer") {
-          // fin o respuesta directa
           setFlowOptions([]);
-          setFlowPath(newPath);
-
           addMessage({
             id: Date.now() + 1,
             type: MESSAGE_TYPES.BOT,
-            content: node.answer || "Listo",
+            content: node.answer || "Listo.",
             timestamp: new Date(),
             fileName: node.file_name || null,
-            mode: "flow",
           });
         } else {
-          // nodo con opciones
           setFlowOptions(node.options || []);
-          setFlowPath(newPath);
-
-          // ✅ Mensaje natural, sin insistir “arriba”
-          addMessage({
-            id: Date.now() + 1,
-            type: MESSAGE_TYPES.BOT,
-            content: node.title ? `Perfecto. ${node.title}` : "Perfecto. Elige una opción:",
-            timestamp: new Date(),
-            mode: "flow",
-          });
         }
-      } catch (error) {
-        console.error(error);
-        addMessage({
-          id: Date.now() + 1,
-          type: MESSAGE_TYPES.BOT,
-          content: "Error al avanzar en el flujo. Intenta otra opción o reinicia el flujo.",
-          timestamp: new Date(),
-          isError: true,
-        });
       } finally {
         setIsFlowLoading(false);
         setIsTyping(false);
@@ -191,6 +151,40 @@ export function ChatProvider({ children }) {
     },
     [addMessage, flowPath, isFlowLoading]
   );
+
+  const backFlow = useCallback(async () => {
+    if (!flowPath || flowPath.length === 0) {
+      await startFlow();
+      return;
+    }
+
+    setIsFlowLoading(true);
+    setIsTyping(true);
+
+    try {
+      const newPath = flowPath.slice(0, -1);
+
+      if (newPath.length === 0) {
+        const root = await getNavigationRoot();
+        setFlowTitle("Opciones guiadas");
+        setFlowOptions(root.options || []);
+        setFlowPath([]);
+        return;
+      }
+
+      const node = await getNavigationNext(newPath);
+      setFlowTitle(node.title || "Opciones guiadas");
+      setFlowOptions(node.options || []);
+      setFlowPath(newPath);
+    } finally {
+      setIsFlowLoading(false);
+      setIsTyping(false);
+    }
+  }, [flowPath, startFlow]);
+
+  const restartFlow = useCallback(async () => {
+    await startFlow();
+  }, [startFlow]);
 
   const exitFlow = useCallback(() => {
     setFlowPath(null);
@@ -201,34 +195,22 @@ export function ChatProvider({ children }) {
     addMessage({
       id: Date.now(),
       type: MESSAGE_TYPES.BOT,
-      content: "Volviste al chat libre. Puedes escribir tu pregunta.",
+      content: "Has salido de las opciones guiadas. Puedes escribir tu pregunta.",
       timestamp: new Date(),
     });
   }, [addMessage]);
 
-  const restartFlow = useCallback(async () => {
-    await startFlow();
-  }, [startFlow]);
-
-  // ========== RAG (chat libre) ==========
   const sendMessage = useCallback(
     async (content) => {
-      if (!content || content.trim() === "" || content.length > 1000) return;
-      if (isTyping) return;
+      if (!content || isTyping || flowPath) return;
 
-      // escribir manualmente => modo libre
-      setFlowPath(null);
-      setFlowOptions([]);
-      setFlowTitle("Opciones guiadas");
-
-      const userMsg = {
+      addMessage({
         id: Date.now(),
         type: MESSAGE_TYPES.USER,
         content: content.trim(),
         timestamp: new Date(),
-      };
+      });
 
-      addMessage(userMsg);
       setInputValue("");
       setIsTyping(true);
 
@@ -239,149 +221,98 @@ export function ChatProvider({ children }) {
         content: "",
         timestamp: new Date(),
         isStreaming: true,
-        sources: [],
       });
 
       let fullAnswer = "";
-      let sources = [];
 
       await askRagStream(content, {
         onMessage: (fragment) => {
           fullAnswer += fragment;
-
           setChats((prev) =>
-            prev.map((chat) => {
-              if (chat.id !== activeChat) return chat;
-              return {
-                ...chat,
-                messages: chat.messages.map((m) => (m.id === botId ? { ...m, content: fullAnswer } : m)),
-              };
-            })
+            prev.map((chat) =>
+              chat.id === activeChat
+                ? {
+                    ...chat,
+                    messages: chat.messages.map((m) =>
+                      m.id === botId ? { ...m, content: fullAnswer } : m
+                    ),
+                  }
+                : chat
+            )
           );
-        },
-        onMetadata: (meta) => {
-          if (meta?.sources) sources = meta.sources;
         },
         onDone: () => {
           setIsTyping(false);
           setChats((prev) =>
-            prev.map((chat) => {
-              if (chat.id !== activeChat) return chat;
-              return {
-                ...chat,
-                messages: chat.messages.map((m) => (m.id === botId ? { ...m, isStreaming: false, sources } : m)),
-              };
-            })
-          );
-        },
-        onError: (error) => {
-          console.error(error);
-          setIsTyping(false);
-          setChats((prev) =>
-            prev.map((chat) => {
-              if (chat.id !== activeChat) return chat;
-              return {
-                ...chat,
-                messages: chat.messages.map((m) =>
-                  m.id === botId
-                    ? {
-                        ...m,
-                        isStreaming: false,
-                        isError: true,
-                        content: "Lo siento, no pude conectarme con el servidor. Verifica tu conexión o el backend.",
-                      }
-                    : m
-                ),
-              };
-            })
+            prev.map((chat) =>
+              chat.id === activeChat
+                ? {
+                    ...chat,
+                    messages: chat.messages.map((m) =>
+                      m.id === botId ? { ...m, isStreaming: false } : m
+                    ),
+                  }
+                : chat
+            )
           );
         },
       });
     },
-    [addMessage, activeChat, isTyping]
+    [addMessage, activeChat, isTyping, flowPath]
   );
 
-  // Chats
   const createNewChat = useCallback(() => {
-    const newChatId = Date.now();
-    const newChat = {
-      id: newChatId,
-      name: "Nueva conversación",
-      messages: [],
-      createdAt: new Date(),
-      active: true,
-    };
-
-    setChats((prev) => [...prev.map((c) => ({ ...c, active: false })), newChat]);
-    setActiveChat(newChatId);
+    const id = Date.now();
+    setChats((prev) => [
+      ...prev.map((c) => ({ ...c, active: false })),
+      { id, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true },
+    ]);
+    setActiveChat(id);
     setInputValue("");
-
     setFlowPath(null);
     setFlowOptions([]);
-    setFlowTitle("Opciones guiadas");
-    setIsFlowLoading(false);
   }, []);
 
   const switchChat = useCallback((chatId) => {
     setChats((prev) => prev.map((c) => ({ ...c, active: c.id === chatId })));
     setActiveChat(chatId);
     setInputValue("");
-
     setFlowPath(null);
     setFlowOptions([]);
-    setFlowTitle("Opciones guiadas");
-    setIsFlowLoading(false);
   }, []);
 
-  const clearAllData = useCallback(() => {
-    try {
-      sessionStorage.removeItem(STORAGE_KEY);
-      setChats([{ id: 1, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true }]);
-      setActiveChat(1);
-      setInputValue("");
+  return (
+    <ChatContext.Provider
+      value={{
+        messages,
+        inputValue,
+        setInputValue,
+        isTyping,
 
-      setFlowPath(null);
-      setFlowOptions([]);
-      setFlowTitle("Opciones guiadas");
-      setIsFlowLoading(false);
-    } catch (error) {
-      console.error("Error al limpiar datos:", error);
-    }
-  }, []);
+        sendMessage,
 
-  const value = {
-    messages,
-    isTyping,
-    inputValue,
-    setInputValue,
+        startFlow,
+        pickFlowOption,
+        backFlow,
+        restartFlow,
+        exitFlow,
 
-    chatHistory: chats,
-    activeChat,
+        flowPath,
+        flowOptions,
+        flowTitle,
+        isFlowLoading,
 
-    addMessage,
-    sendMessage,
-
-    // flujo
-    startFlow,
-    pickFlowOption,
-    exitFlow,
-    restartFlow,
-    flowPath,
-    flowOptions,
-    flowTitle,
-    isFlowLoading,
-
-    // chat control
-    createNewChat,
-    switchChat,
-    clearAllData,
-  };
-
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+        chatHistory: chats,
+        activeChat,
+        createNewChat,
+        switchChat,
+      }}
+    >
+      {children}
+    </ChatContext.Provider>
+  );
 }
 
 export function useChat() {
-  const context = useContext(ChatContext);
-  if (!context) throw new Error("useChat must be used within ChatProvider");
-  return context;
+  return useContext(ChatContext);
 }
