@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useEffect,
-} from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { MESSAGE_TYPES } from "../utils/constants";
 import { askRagStream } from "../Services/ragService";
 import { getNavigationRoot, getNavigationNext } from "../Services/navigationService";
@@ -12,7 +6,7 @@ import { getNavigationRoot, getNavigationNext } from "../Services/navigationServ
 const ChatContext = createContext();
 const STORAGE_KEY = "fiswize_chat_data";
 
-// sessionStorage: se borra al cerrar pestaña/navegador
+// ✅ sessionStorage (se borra al cerrar pestaña)
 const loadFromSessionStorage = () => {
   try {
     const savedData = sessionStorage.getItem(STORAGE_KEY);
@@ -26,10 +20,7 @@ const loadFromSessionStorage = () => {
           timestamp: new Date(msg.timestamp),
         })),
       }));
-      return {
-        chats: chatsWithDates,
-        activeChat: parsed.activeChat,
-      };
+      return { chats: chatsWithDates, activeChat: parsed.activeChat };
     }
   } catch (error) {
     console.error("Error al cargar desde sessionStorage:", error);
@@ -41,22 +32,14 @@ export function ChatProvider({ children }) {
   const savedData = loadFromSessionStorage();
 
   const [chats, setChats] = useState(
-    savedData?.chats || [
-      {
-        id: 1,
-        name: "Nueva conversación",
-        messages: [],
-        createdAt: new Date(),
-        active: true,
-      },
-    ]
+    savedData?.chats || [{ id: 1, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true }]
   );
   const [activeChat, setActiveChat] = useState(savedData?.activeChat || 1);
   const [isTyping, setIsTyping] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
-  // FLUJOS
-  const [flowPath, setFlowPath] = useState(null); // null = no hay flujo activo
+  // ---- FLUJOS ----
+  const [flowPath, setFlowPath] = useState(null); // null = no estamos en flujo
   const [flowOptions, setFlowOptions] = useState([]);
   const [flowTitle, setFlowTitle] = useState("Opciones guiadas");
   const [isFlowLoading, setIsFlowLoading] = useState(false);
@@ -64,7 +47,7 @@ export function ChatProvider({ children }) {
   const currentChat = chats.find((c) => c.id === activeChat);
   const messages = currentChat?.messages || [];
 
-  // sessionStorage
+  // Persistencia
   useEffect(() => {
     try {
       const dataToSave = {
@@ -94,8 +77,7 @@ export function ChatProvider({ children }) {
                 messages: [...chat.messages, message],
                 name:
                   chat.messages.length === 0 && message.type === MESSAGE_TYPES.USER
-                    ? message.content.slice(0, 30) +
-                      (message.content.length > 30 ? "..." : "")
+                    ? message.content.slice(0, 30) + (message.content.length > 30 ? "..." : "")
                     : chat.name,
               }
             : chat
@@ -105,21 +87,24 @@ export function ChatProvider({ children }) {
     [activeChat]
   );
 
-  // FLUJOS
+  // ========== FLUJOS ==========
   const startFlow = useCallback(async () => {
+    if (isFlowLoading) return;
+
     setIsFlowLoading(true);
     setIsTyping(true);
 
     try {
-      const root = await getNavigationRoot(); // { options }
+      const root = await getNavigationRoot(); // { level, options }
       setFlowTitle("Opciones guiadas");
       setFlowOptions(root.options || []);
-      setFlowPath([]); // flujo activo
+      setFlowPath([]); // estamos en flujo
 
+      // ✅ Mensaje natural (sin “selecciona arriba”)
       addMessage({
         id: Date.now(),
         type: MESSAGE_TYPES.BOT,
-        content: "Selecciona una opción de la barra superior para continuar.",
+        content: "Perfecto 😊 Elige una opción:",
         timestamp: new Date(),
         mode: "flow",
       });
@@ -140,17 +125,13 @@ export function ChatProvider({ children }) {
       setIsFlowLoading(false);
       setIsTyping(false);
     }
-  }, [addMessage]);
+  }, [addMessage, isFlowLoading]);
 
   const pickFlowOption = useCallback(
     async (optionId, optionLabel) => {
       if (isFlowLoading) return;
 
-      if (flowPath === null) {
-        await startFlow();
-        return;
-      }
-
+      // mostrar selección del usuario
       addMessage({
         id: Date.now(),
         type: MESSAGE_TYPES.USER,
@@ -168,28 +149,28 @@ export function ChatProvider({ children }) {
         setFlowTitle(node.title || "Opciones guiadas");
 
         if (node.type === "answer") {
-          // SE ocultAN botones:
+          // fin o respuesta directa
           setFlowOptions([]);
           setFlowPath(newPath);
 
           addMessage({
             id: Date.now() + 1,
             type: MESSAGE_TYPES.BOT,
-            content: node.answer || "Listo.",
+            content: node.answer || "Listo",
             timestamp: new Date(),
             fileName: node.file_name || null,
             mode: "flow",
           });
         } else {
+          // nodo con opciones
           setFlowOptions(node.options || []);
           setFlowPath(newPath);
 
+          // ✅ Mensaje natural, sin insistir “arriba”
           addMessage({
             id: Date.now() + 1,
             type: MESSAGE_TYPES.BOT,
-            content: node.title
-              ? `${node.title}: selecciona una opción en la barra superior.`
-              : "Selecciona una opción en la barra superior.",
+            content: node.title ? `Perfecto. ${node.title}` : "Perfecto. Elige una opción:",
             timestamp: new Date(),
             mode: "flow",
           });
@@ -208,10 +189,9 @@ export function ChatProvider({ children }) {
         setIsTyping(false);
       }
     },
-    [addMessage, flowPath, isFlowLoading, startFlow]
+    [addMessage, flowPath, isFlowLoading]
   );
 
-  // Salir del flujo -> chat libre
   const exitFlow = useCallback(() => {
     setFlowPath(null);
     setFlowOptions([]);
@@ -221,27 +201,25 @@ export function ChatProvider({ children }) {
     addMessage({
       id: Date.now(),
       type: MESSAGE_TYPES.BOT,
-      content: "Listo ✅ Volviste al modo chat libre. Puedes escribir tu pregunta.",
+      content: "Volviste al chat libre. Puedes escribir tu pregunta.",
       timestamp: new Date(),
     });
   }, [addMessage]);
 
-  // Reiniciar el flujo 
   const restartFlow = useCallback(async () => {
     await startFlow();
   }, [startFlow]);
 
-  // RAG
+  // ========== RAG (chat libre) ==========
   const sendMessage = useCallback(
     async (content) => {
       if (!content || content.trim() === "" || content.length > 1000) return;
       if (isTyping) return;
 
-      // escribir manualmente, modo chat libre, se oculta barra)
+      // escribir manualmente => modo libre
       setFlowPath(null);
       setFlowOptions([]);
       setFlowTitle("Opciones guiadas");
-      setIsFlowLoading(false);
 
       const userMsg = {
         id: Date.now(),
@@ -276,9 +254,7 @@ export function ChatProvider({ children }) {
               if (chat.id !== activeChat) return chat;
               return {
                 ...chat,
-                messages: chat.messages.map((m) =>
-                  m.id === botId ? { ...m, content: fullAnswer } : m
-                ),
+                messages: chat.messages.map((m) => (m.id === botId ? { ...m, content: fullAnswer } : m)),
               };
             })
           );
@@ -293,9 +269,7 @@ export function ChatProvider({ children }) {
               if (chat.id !== activeChat) return chat;
               return {
                 ...chat,
-                messages: chat.messages.map((m) =>
-                  m.id === botId ? { ...m, isStreaming: false, sources } : m
-                ),
+                messages: chat.messages.map((m) => (m.id === botId ? { ...m, isStreaming: false, sources } : m)),
               };
             })
           );
@@ -314,8 +288,7 @@ export function ChatProvider({ children }) {
                         ...m,
                         isStreaming: false,
                         isError: true,
-                        content:
-                          "Lo siento, no pude conectarme con el servidor. Verifica tu conexión o el backend.",
+                        content: "Lo siento, no pude conectarme con el servidor. Verifica tu conexión o el backend.",
                       }
                     : m
                 ),
@@ -328,7 +301,7 @@ export function ChatProvider({ children }) {
     [addMessage, activeChat, isTyping]
   );
 
-  // CHATS
+  // Chats
   const createNewChat = useCallback(() => {
     const newChatId = Date.now();
     const newChat = {
@@ -363,15 +336,7 @@ export function ChatProvider({ children }) {
   const clearAllData = useCallback(() => {
     try {
       sessionStorage.removeItem(STORAGE_KEY);
-      setChats([
-        {
-          id: 1,
-          name: "Nueva conversación",
-          messages: [],
-          createdAt: new Date(),
-          active: true,
-        },
-      ]);
+      setChats([{ id: 1, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true }]);
       setActiveChat(1);
       setInputValue("");
 
@@ -396,7 +361,7 @@ export function ChatProvider({ children }) {
     addMessage,
     sendMessage,
 
-    // flujo + controles
+    // flujo
     startFlow,
     pickFlowOption,
     exitFlow,
@@ -406,6 +371,7 @@ export function ChatProvider({ children }) {
     flowTitle,
     isFlowLoading,
 
+    // chat control
     createNewChat,
     switchChat,
     clearAllData,

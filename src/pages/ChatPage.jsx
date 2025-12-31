@@ -6,8 +6,9 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 
 import NavBar from "../components/common/NavBar";
 import Sidebar from "../components/sidebar/Sidebar";
+
 import MessageBubble from "../components/Chat/MessageBubble";
-import ChatInput from "../components/Chat/ChatInput";
+import ChatInput from "../components/chat/ChatInput";
 import TypingIndicator from "../components/Chat/TypingIndicator";
 import FlowOptionsBar from "../components/Chat/FlowOptionsBar";
 
@@ -28,10 +29,20 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
     restartFlow,
   } = useChat();
 
-  const [isSidebarOpen, setIsSidebarOpen] = React.useState(window.innerWidth >= 768);
+  // ✅ Sidebar: desktop abierto, móvil cerrado
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(() => window.innerWidth >= 768);
 
+  // ✅ Auto-ajuste al redimensionar (si pasa a desktop => abre; si baja a móvil => cierra)
+  React.useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth >= 768) setIsSidebarOpen(true);
+      else setIsSidebarOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
-  // SCROLL REFERS
+  // SCROLL REFS
   const scrollContainerRef = React.useRef(null);
   const messagesTopRef = React.useRef(null);
   const messagesEndRef = React.useRef(null);
@@ -50,20 +61,24 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    // distancia desde el final
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-
-    // si el usuario se aleja del final, mostraR botón 
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     setShowScrollDown(distanceFromBottom > 150);
   }, []);
 
-  //  Auto-scroll
+  // Auto-scroll: solo si el usuario está cerca del final o si es typing/streaming
   const lastMessageContent = messages[messages.length - 1]?.content;
 
   React.useLayoutEffect(() => {
-    
-    scrollToBottom();
+    // Si el usuario está lejos del final, no lo forzamos siempre (para no ser molesto)
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+
+    // Si está cerca del final o el bot está escribiendo, bajamos
+    if (distanceFromBottom < 220 || isTyping) {
+      scrollToBottom();
+    }
   }, [messages.length, isTyping, lastMessageContent, scrollToBottom]);
 
   return (
@@ -74,17 +89,23 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
           : "bg-gradient-to-br from-[#F1F8E9] via-[#E3F2FD] to-[#E8F5E9]"
       }`}
     >
-      <NavBar currentPage="chat" onNavigate={onNavigate} />
+      {/* ✅ NavBar ahora controla el toggle del sidebar en móvil */}
+      <NavBar
+        currentPage="chat"
+        onNavigate={onNavigate}
+        onToggleSidebar={() => setIsSidebarOpen((v) => !v)}
+        isSidebarOpen={isSidebarOpen}
+      />
 
       <div className="flex h-[calc(100vh-72px)]">
         <Sidebar
           isOpen={isSidebarOpen}
-          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+          onToggle={() => setIsSidebarOpen((v) => !v)}
           onNewChat={onNewChat}
         />
 
         <main className="flex-1 flex flex-col relative" role="main">
-          {/* Barra botones arriba */}
+          {/* Barra botones arriba (sticky) */}
           <FlowOptionsBar
             title={flowTitle}
             options={flowOptions}
@@ -95,7 +116,7 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
             onStartFlow={startFlow}
           />
 
-          {/* Área de mensajes  */}
+          {/* Área de mensajes */}
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
@@ -103,26 +124,27 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
             role="log"
             aria-live="polite"
           >
-            {/* Ancla para subir al inicio */}
+            {/* Ancla top */}
             <div ref={messagesTopRef} />
 
-            <div className="max-w-4xl mx-auto space-y-4 pb-32">
+            <div className="max-w-4xl mx-auto space-y-4 pb-28">
               {messages.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col items-center justify-start pt-12 min-h-[500px]"
+                  className="flex flex-col items-center justify-start pt-10 min-h-[460px]"
                 >
-                  <div className="text-center mb-12 max-w-3xl">
+                  <div className="text-center mb-10 max-w-3xl">
                     <h2
                       className={`text-3xl md:text-4xl font-bold mb-4 ${
                         isDarkMode ? "text-[#6EC971]" : "text-[#195427]"
                       }`}
                     >
-                      ¡Hola! Soy BuhoFIS, Tu Asistente Virtual
+                      ¡Hola! Soy BuhoFIS, tu asistente virtual
                       <br />
-                      Estoy Aquí Para Ayudarte
+                      Estoy aquí para ayudarte
                     </h2>
+
                     <div
                       className={`flex items-center justify-center gap-2 text-base ${
                         isDarkMode ? "text-[#B3E5FC]" : "text-[#003554]"
@@ -132,7 +154,7 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
                         💡
                       </span>
                       <p className="font-medium">
-                        Puedes escribir tu pregunta directamente o usar los botones de acceso rápido.
+                        Puedes escribir tu pregunta o usar opciones guiadas.
                       </p>
                     </div>
                   </div>
@@ -154,6 +176,7 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
                         } text-white px-6 py-3 rounded-full text-base font-semibold transition-all shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                           isDarkMode ? "focus:ring-[#6EC971]" : "focus:ring-[#0582CA]"
                         } min-w-[200px]`}
+                        type="button"
                       >
                         {item.label}
                       </motion.button>
@@ -161,7 +184,6 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
                   </div>
                 </motion.div>
               ) : (
-               
                 <>
                   <AnimatePresence>
                     {messages.map((message) => (
@@ -173,29 +195,39 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
                 </>
               )}
 
-              {/* Ancla para bajar al final */}
+              {/* Ancla bottom */}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Búho decorativo*/} <div className="fixed bottom-24 right-6 pointer-events-none z-40" aria-hidden="true" > <motion.img initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} src={isDarkMode ? BUHOALADARK : BUHOALALIGHT} alt="Búho FISWise" className="h-48 md:h-64 lg:h-72 object-contain select-none drop-shadow-2xl" draggable="false" /> </div> </div>
+            {/* ✅ Búho decorativo: SOLO desktop (md+) para evitar conflicto en móvil */}
+            <div className="hidden md:block fixed bottom-24 right-6 pointer-events-none z-40" aria-hidden="true">
+              <motion.img
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+                src={isDarkMode ? BUHOALADARK : BUHOALALIGHT}
+                alt="Búho FISWise"
+                className="h-48 md:h-64 lg:h-72 object-contain select-none drop-shadow-2xl"
+                draggable="false"
+              />
+            </div>
+          </div>
 
           {/* Botón subir al inicio */}
           <button
             onClick={scrollToTop}
-            className="fixed bottom-40 right-6 z-50 p-3 rounded-full shadow-lg transition-all
-                       bg-[#084062] text-white hover:bg-[#0582CA]"
+            className="fixed bottom-40 right-4 md:right-6 z-50 p-3 rounded-full shadow-lg transition-all bg-[#084062] text-white hover:bg-[#0582CA]"
             aria-label="Ir al inicio del chat"
             type="button"
           >
             <ArrowUp size={20} />
           </button>
 
-          {/* Botón bajar al final (solo si  subió) */}
+          {/* Botón bajar al final */}
           {showScrollDown && (
             <button
               onClick={scrollToBottom}
-              className="fixed bottom-28 right-6 z-50 p-3 rounded-full shadow-lg transition-all
-                         bg-[#195427] text-white hover:bg-[#2d7a47] animate-bounce"
+              className="fixed bottom-28 right-4 md:right-6 z-50 p-3 rounded-full shadow-lg transition-all bg-[#195427] text-white hover:bg-[#2d7a47] animate-bounce"
               aria-label="Ir al último mensaje"
               type="button"
             >
@@ -203,7 +235,6 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
             </button>
           )}
 
-          {}
           <ChatInput />
         </main>
       </div>

@@ -4,6 +4,7 @@ import { ChatProvider, useChat } from "./context/ChatContext";
 import LandingPage from "./pages/LandingPage";
 import ChatPage from "./pages/ChatPage";
 
+
 function AppContent() {
   const [currentPage, setCurrentPage] = useState("landing");
   const { createNewChat } = useChat();
