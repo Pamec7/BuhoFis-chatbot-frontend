@@ -8,7 +8,7 @@ import NavBar from "../components/common/NavBar";
 import Sidebar from "../components/sidebar/Sidebar";
 
 import MessageBubble from "../components/Chat/MessageBubble";
-import ChatInput from "../components/chat/ChatInput";
+import ChatInput from "../components/Chat/ChatInput";
 import TypingIndicator from "../components/Chat/TypingIndicator";
 import FlowOptionsBar from "../components/Chat/FlowOptionsBar";
 
