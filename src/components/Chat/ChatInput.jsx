@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useChat } from "../../context/ChatContext";
@@ -10,6 +10,8 @@ const ChatInput = () => {
 
   const isFlowActive = !!flowPath;
 
+  const [inputError, setInputError] = useState("");
+
   const sanitizeInput = (text) => {
     return text
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
@@ -18,21 +20,38 @@ const ChatInput = () => {
   };
 
   const containsInappropriateContent = (text) => {
-    const inappropriateWords = ["palabra1", "palabra2"];
+    const inappropriateWords = ["muerte", "no sirves","joder","tonto"];
     const lowerText = text.toLowerCase();
     return inappropriateWords.some((word) => lowerText.includes(word));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setInputError("");
 
-    if (isFlowActive) return;
+    if (isFlowActive) {
+      setInputError("Estás en opciones guiadas. Usa los botones de arriba o presiona “Chat libre”.");
+      return;
+    }
+
     if (!inputValue.trim() || inputValue.length > 1000 || isTyping) return;
 
     const sanitized = sanitizeInput(inputValue);
 
+    if (!sanitized) {
+      setInputError("El contendio de tu mensaje no esta permitido. Reformúlalo.");
+      return;
+    }
+
     if (containsInappropriateContent(sanitized)) {
-      alert("Tu mensaje contiene contenido inapropiado. Por favor, reformula tu pregunta.");
+      setInputError("Tu mensaje contiene lenguaje no permitido. Por favor reformúlalo.");
+      return;
+    }
+
+    // Si el texto fue modificado por sanitización, lo bloqueamos y avisamos
+    // para evitar que el usuario sienta que el sistema “cambió” su mensaje.
+    if (sanitized !== inputValue.trim()) {
+      setInputError("Tu mensaje contiene caracteres o formato no permitido. Por favor reformúlalo.");
       return;
     }
 
@@ -53,6 +72,12 @@ const ChatInput = () => {
       textareaRef.current.style.height = Math.min(scrollHeight, 120) + "px";
     }
   }, [inputValue]);
+
+  // Limpia el error cuando el usuario vuelve a escribir o cambia estado de flujo
+  useEffect(() => {
+    if (inputError) setInputError("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputValue, flowPath]);
 
   return (
     <div
@@ -90,7 +115,7 @@ const ChatInput = () => {
                 isDarkMode ? "focus:ring-[#6EC971]" : "focus:ring-[#0582CA]"
               } resize-none transition-all disabled:opacity-60 disabled:cursor-not-allowed`}
               style={{ minHeight: "52px", maxHeight: "120px" }}
-              aria-describedby="char-count message-info"
+              aria-describedby="char-count message-info input-error"
             />
           </div>
 
@@ -109,6 +134,20 @@ const ChatInput = () => {
             <Send size={22} aria-hidden="true" />
           </button>
         </div>
+
+        {/* Error discreto, no intrusivo */}
+        {inputError && (
+          <p
+            id="input-error"
+            className={`mt-2 text-xs font-medium ${
+              isDarkMode ? "text-red-300" : "text-red-600"
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            {inputError}
+          </p>
+        )}
 
         <div className="flex justify-between items-center mt-2 px-1">
           <p id="message-info" className={`text-xs ${isDarkMode ? "text-[#B3E5FC]" : "text-[#003554]"}`}>
