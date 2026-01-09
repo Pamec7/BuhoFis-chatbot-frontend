@@ -4,7 +4,7 @@ import { askRagStream } from "../Services/ragService";
 import { getNavigationRoot, getNavigationNext } from "../Services/navigationService";
 
 const ChatContext = createContext();
-const STORAGE_KEY = "fiswize_chat_data";
+const STORAGE_KEY = "buhofis_chat_data";
 
 const loadFromSessionStorage = () => {
   try {

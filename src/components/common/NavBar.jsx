@@ -29,7 +29,7 @@ const NavBar = ({ currentPage, onNavigate, onToggleSidebar, isSidebarOpen }) => 
           className={`w-10 h-10 ${isDarkMode ? "bg-[#ffffff]" : "bg-[#f5f5f6]"} rounded-full flex items-center justify-center overflow-hidden`}
           aria-hidden="true"
         >
-          <img src={logo} alt="FISWise logo" className="w-14 h-14 object-contain" />
+          <img src={logo} alt="BuhoFis logo" className="w-14 h-14 object-contain" />
         </div>
         <span className="text-white font-bold text-lg md:text-xl">BUHOCHAT</span>
       </div>

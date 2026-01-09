@@ -186,7 +186,7 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5 }}
                 src={isDarkMode ? BUHOALADARK : BUHOALALIGHT}
-                alt="Búho FISWise"
+                alt="BúhoFIS"
                 className="h-48 md:h-64 lg:h-72 object-contain select-none drop-shadow-2xl"
                 draggable="false"
               />
