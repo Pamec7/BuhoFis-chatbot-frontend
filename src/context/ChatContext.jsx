@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { MESSAGE_TYPES } from "../utils/constants";
 import { askRagStream } from "../Services/ragService";
 import { getNavigationRoot, getNavigationNext } from "../Services/navigationService";
@@ -45,6 +45,9 @@ export function ChatProvider({ children }) {
   const [flowOptions, setFlowOptions] = useState([]);
   const [flowTitle, setFlowTitle] = useState("Opciones guiadas");
   const [isFlowLoading, setIsFlowLoading] = useState(false);
+
+  const streamAbortRef = useRef(null);
+  const streamingBotIdRef = useRef(null);
 
   const currentChat = chats.find((c) => c.id === activeChat);
   const messages = currentChat?.messages || [];
@@ -200,6 +203,15 @@ export function ChatProvider({ children }) {
     });
   }, [addMessage]);
 
+  const stopStreaming = useCallback(() => {
+    const controller = streamAbortRef.current;
+    if (controller) {
+      try {
+        controller.abort();
+      } catch {}
+    }
+  }, []);
+
   const sendMessage = useCallback(
     async (content) => {
       if (!content || isTyping || flowPath) return;
@@ -215,6 +227,8 @@ export function ChatProvider({ children }) {
       setIsTyping(true);
 
       const botId = Date.now() + 1;
+      streamingBotIdRef.current = botId;
+
       addMessage({
         id: botId,
         type: MESSAGE_TYPES.BOT,
@@ -225,43 +239,106 @@ export function ChatProvider({ children }) {
 
       let fullAnswer = "";
 
-      await askRagStream(content, {
-        onMessage: (fragment) => {
-          fullAnswer += fragment;
-          setChats((prev) =>
-            prev.map((chat) =>
-              chat.id === activeChat
-                ? {
-                    ...chat,
-                    messages: chat.messages.map((m) =>
-                      m.id === botId ? { ...m, content: fullAnswer } : m
-                    ),
-                  }
-                : chat
-            )
-          );
+      if (streamAbortRef.current) {
+        try {
+          streamAbortRef.current.abort();
+        } catch {}
+      }
+
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
+
+      await askRagStream(
+        content,
+        {
+          onMessage: (fragment) => {
+            fullAnswer += fragment;
+            setChats((prev) =>
+              prev.map((chat) =>
+                chat.id === activeChat
+                  ? {
+                      ...chat,
+                      messages: chat.messages.map((m) =>
+                        m.id === botId ? { ...m, content: fullAnswer } : m
+                      ),
+                    }
+                  : chat
+              )
+            );
+          },
+          onDone: () => {
+            streamAbortRef.current = null;
+            streamingBotIdRef.current = null;
+
+            setIsTyping(false);
+            setChats((prev) =>
+              prev.map((chat) =>
+                chat.id === activeChat
+                  ? {
+                      ...chat,
+                      messages: chat.messages.map((m) =>
+                        m.id === botId ? { ...m, isStreaming: false } : m
+                      ),
+                    }
+                  : chat
+              )
+            );
+          },
+          onAbort: () => {
+            streamAbortRef.current = null;
+            const currentBotId = streamingBotIdRef.current;
+            streamingBotIdRef.current = null;
+
+            setIsTyping(false);
+            setChats((prev) =>
+              prev.map((chat) =>
+                chat.id === activeChat
+                  ? {
+                      ...chat,
+                      messages: chat.messages.map((m) =>
+                        m.id === currentBotId
+                          ? { ...m, isStreaming: false, content: (m.content || fullAnswer || "").trimEnd() }
+                          : m
+                      ),
+                    }
+                  : chat
+              )
+            );
+          },
+          onError: (err) => {
+            streamAbortRef.current = null;
+            streamingBotIdRef.current = null;
+
+            setIsTyping(false);
+            setChats((prev) =>
+              prev.map((chat) =>
+                chat.id === activeChat
+                  ? {
+                      ...chat,
+                      messages: chat.messages.map((m) =>
+                        m.id === botId
+                          ? {
+                              ...m,
+                              isStreaming: false,
+                              content: "No pude conectarme al backend.\n\n" + (err?.message || String(err)),
+                            }
+                          : m
+                      ),
+                    }
+                  : chat
+              )
+            );
+          },
         },
-        onDone: () => {
-          setIsTyping(false);
-          setChats((prev) =>
-            prev.map((chat) =>
-              chat.id === activeChat
-                ? {
-                    ...chat,
-                    messages: chat.messages.map((m) =>
-                      m.id === botId ? { ...m, isStreaming: false } : m
-                    ),
-                  }
-                : chat
-            )
-          );
-        },
-      });
+        true,
+        controller.signal
+      );
     },
     [addMessage, activeChat, isTyping, flowPath]
   );
 
   const createNewChat = useCallback(() => {
+    stopStreaming();
     const id = Date.now();
     setChats((prev) => [
       ...prev.map((c) => ({ ...c, active: false })),
@@ -271,15 +348,19 @@ export function ChatProvider({ children }) {
     setInputValue("");
     setFlowPath(null);
     setFlowOptions([]);
-  }, []);
+  }, [stopStreaming]);
 
-  const switchChat = useCallback((chatId) => {
-    setChats((prev) => prev.map((c) => ({ ...c, active: c.id === chatId })));
-    setActiveChat(chatId);
-    setInputValue("");
-    setFlowPath(null);
-    setFlowOptions([]);
-  }, []);
+  const switchChat = useCallback(
+    (chatId) => {
+      stopStreaming();
+      setChats((prev) => prev.map((c) => ({ ...c, active: c.id === chatId })));
+      setActiveChat(chatId);
+      setInputValue("");
+      setFlowPath(null);
+      setFlowOptions([]);
+    },
+    [stopStreaming]
+  );
 
   return (
     <ChatContext.Provider
@@ -288,20 +369,17 @@ export function ChatProvider({ children }) {
         inputValue,
         setInputValue,
         isTyping,
-
         sendMessage,
-
+        stopStreaming,
         startFlow,
         pickFlowOption,
         backFlow,
         restartFlow,
         exitFlow,
-
         flowPath,
         flowOptions,
         flowTitle,
         isFlowLoading,
-
         chatHistory: chats,
         activeChat,
         createNewChat,
