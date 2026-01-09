@@ -4,7 +4,7 @@ import { askRagStream } from "../Services/ragService";
 import { getNavigationRoot, getNavigationNext } from "../Services/navigationService";
 
 const ChatContext = createContext();
-const STORAGE_KEY = "buhofis_chat_data";
+const STORAGE_KEY = "fiswize_chat_data";
 
 const loadFromSessionStorage = () => {
   try {
@@ -50,13 +50,19 @@ const classifyError = (err) => {
   return { msg, isNetwork };
 };
 
+const createDefaultChat = () => ({
+  id: Date.now(),
+  name: "Nueva conversación",
+  messages: [],
+  createdAt: new Date(),
+  active: true,
+});
+
 export function ChatProvider({ children }) {
   const savedData = loadFromSessionStorage();
 
   const [chats, setChats] = useState(
-    savedData?.chats || [
-      { id: 1, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true },
-    ]
+    savedData?.chats || [{ id: 1, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true }]
   );
   const [activeChat, setActiveChat] = useState(savedData?.activeChat || 1);
 
@@ -89,6 +95,15 @@ export function ChatProvider({ children }) {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [chats, activeChat]);
 
+  const stopStreaming = useCallback(() => {
+    const controller = streamAbortRef.current;
+    if (controller) {
+      try {
+        controller.abort();
+      } catch {}
+    }
+  }, []);
+
   const addMessage = useCallback(
     (message) => {
       setChats((prev) =>
@@ -97,7 +112,6 @@ export function ChatProvider({ children }) {
 
           const isDefaultName = chat.name === "Nueva conversación";
           const userCount = chat.messages.filter((m) => m.type === MESSAGE_TYPES.USER).length;
-
           const shouldRename = isDefaultName && message.type === MESSAGE_TYPES.USER && userCount === 0;
 
           return {
@@ -112,6 +126,58 @@ export function ChatProvider({ children }) {
     },
     [activeChat]
   );
+
+  const prefillInput = useCallback(
+    (text) => {
+      stopStreaming();
+      setFlowPath(null);
+      setFlowOptions([]);
+      setFlowTitle("Opciones guiadas");
+      setIsFlowLoading(false);
+      setInputValue(text || "");
+      window.dispatchEvent(new Event("fiswize:focus-input"));
+    },
+    [stopStreaming]
+  );
+
+  const deleteChat = useCallback(
+    (chatId) => {
+      stopStreaming();
+      setChats((prev) => {
+        const remaining = prev.filter((c) => c.id !== chatId);
+        if (remaining.length === 0) {
+          const fresh = createDefaultChat();
+          setActiveChat(fresh.id);
+          return [fresh];
+        }
+
+        if (chatId === activeChat) {
+          const next = remaining[remaining.length - 1];
+          setActiveChat(next.id);
+          return remaining.map((c) => ({ ...c, active: c.id === next.id }));
+        }
+
+        return remaining;
+      });
+
+      setInputValue("");
+      setFlowPath(null);
+      setFlowOptions([]);
+    },
+    [activeChat, stopStreaming]
+  );
+
+  const clearAllChats = useCallback(() => {
+    stopStreaming();
+    const fresh = createDefaultChat();
+    setChats([fresh]);
+    setActiveChat(fresh.id);
+    setInputValue("");
+    setFlowPath(null);
+    setFlowOptions([]);
+    setFlowTitle("Opciones guiadas");
+    setIsFlowLoading(false);
+  }, [stopStreaming]);
 
   const startFlow = useCallback(async () => {
     setIsFlowLoading(true);
@@ -138,7 +204,7 @@ export function ChatProvider({ children }) {
         variant: "error",
         title: isNetwork ? "Error de conexión" : "Error del servidor",
         content: isNetwork
-          ? "No pude conectarme al servidor para cargar las opciones guiadas.\nRevisa tu conexión/backend."
+          ? "No pude conectarme al servidor para cargar las opciones guiadas.\nRevisa tu conexión o la URL del backend."
           : "El servidor respondió con error al cargar las opciones guiadas.",
         detail: msg || null,
         timestamp: new Date(),
@@ -174,11 +240,7 @@ export function ChatProvider({ children }) {
           setFlowOptions([]);
 
           const rawFile =
-            node?.file_name ??
-            node?.fileName ??
-            node?.file ??
-            node?.filename ??
-            null;
+            node?.file_name ?? node?.fileName ?? node?.file ?? node?.filename ?? null;
 
           const fileName = typeof rawFile === "string" ? rawFile.trim() : null;
           const hasFile = !!(fileName && fileName.length > 0);
@@ -204,7 +266,7 @@ export function ChatProvider({ children }) {
           variant: "error",
           title: isNetwork ? "Error de conexión" : "Error del servidor",
           content: isNetwork
-            ? "No pude conectarme al servidor para completar esa consulta.\nRevisa tu conexión/backend."
+            ? "No pude conectarme al servidor para completar esa consulta.\nRevisa tu conexión o la URL del backend."
             : "El servidor respondió con error al completar esa consulta.",
           detail: msg || null,
           timestamp: new Date(),
@@ -250,7 +312,7 @@ export function ChatProvider({ children }) {
         variant: "error",
         title: isNetwork ? "Error de conexión" : "Error del servidor",
         content: isNetwork
-          ? "No pude conectarme al servidor para volver atrás en el flujo.\nRevisa tu conexión/backend."
+          ? "No pude conectarme al servidor para volver atrás en el flujo.\nRevisa tu conexión o la URL del backend."
           : "El servidor respondió con error al volver atrás en el flujo.",
         detail: msg || null,
         timestamp: new Date(),
@@ -280,15 +342,6 @@ export function ChatProvider({ children }) {
       timestamp: new Date(),
     });
   }, [addMessage]);
-
-  const stopStreaming = useCallback(() => {
-    const controller = streamAbortRef.current;
-    if (controller) {
-      try {
-        controller.abort();
-      } catch {}
-    }
-  }, []);
 
   const sendMessage = useCallback(
     async (content) => {
@@ -439,7 +492,7 @@ export function ChatProvider({ children }) {
                               variant: "error",
                               title: isNetwork ? "Error de conexión" : "Error del servidor",
                               content: isNetwork
-                                ? "No pude conectarme al servidor.\nRevisa tu conexión/backend."
+                                ? "No pude conectarme al servidor.\nRevisa tu conexión o la URL del backend."
                                 : "El servidor respondió con error.",
                               detail: msg || null,
                               sources: lastSources,
@@ -461,12 +514,9 @@ export function ChatProvider({ children }) {
 
   const createNewChat = useCallback(() => {
     stopStreaming();
-    const id = Date.now();
-    setChats((prev) => [
-      ...prev.map((c) => ({ ...c, active: false })),
-      { id, name: "Nueva conversación", messages: [], createdAt: new Date(), active: true },
-    ]);
-    setActiveChat(id);
+    const fresh = createDefaultChat();
+    setChats((prev) => [...prev.map((c) => ({ ...c, active: false })), fresh]);
+    setActiveChat(fresh.id);
     setInputValue("");
     setFlowPath(null);
     setFlowOptions([]);
@@ -493,6 +543,7 @@ export function ChatProvider({ children }) {
         isTyping,
         sendMessage,
         stopStreaming,
+        prefillInput,
         startFlow,
         pickFlowOption,
         backFlow,
@@ -506,6 +557,8 @@ export function ChatProvider({ children }) {
         activeChat,
         createNewChat,
         switchChat,
+        deleteChat,
+        clearAllChats,
       }}
     >
       {children}

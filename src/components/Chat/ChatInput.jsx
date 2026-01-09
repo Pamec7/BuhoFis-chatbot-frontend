@@ -1,12 +1,11 @@
-// src/components/Chat/ChatInput.jsx
 import React, { useRef, useEffect, useState } from "react";
-import { Send, Square } from "lucide-react";
+import { Send } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useChat } from "../../context/ChatContext";
 
 const ChatInput = () => {
   const { isDarkMode } = useTheme();
-  const { inputValue, setInputValue, sendMessage, isTyping, flowPath, stopStreaming } = useChat();
+  const { inputValue, setInputValue, sendMessage, isTyping, flowPath } = useChat();
   const textareaRef = useRef(null);
 
   const isFlowActive = !!flowPath;
@@ -29,14 +28,12 @@ const ChatInput = () => {
     e.preventDefault();
     setInputError("");
 
-    if (isTyping) return;
-
     if (isFlowActive) {
       setInputError("Estás en opciones guiadas. Usa los botones de arriba o presiona “Chat libre”.");
       return;
     }
 
-    if (!inputValue.trim() || inputValue.length > 1000) return;
+    if (!inputValue.trim() || inputValue.length > 1000 || isTyping) return;
 
     const sanitized = sanitizeInput(inputValue);
 
@@ -74,15 +71,23 @@ const ChatInput = () => {
   }, [inputValue]);
 
   useEffect(() => {
+    const onFocus = () => {
+      textareaRef.current?.focus();
+    };
+    window.addEventListener("fiswize:focus-input", onFocus);
+    return () => window.removeEventListener("fiswize:focus-input", onFocus);
+  }, []);
+
+  useEffect(() => {
     if (inputError) setInputError("");
   }, [inputValue, flowPath]);
-
-  const showStop = isTyping;
 
   return (
     <div
       className={`p-4 ${
-        isDarkMode ? "bg-gradient-to-r from-[#002a4a] to-[#003D61]" : "bg-gradient-to-r from-[#E3F2FD] to-[#E8F5E9]"
+        isDarkMode
+          ? "bg-gradient-to-r from-[#002a4a] to-[#003D61]"
+          : "bg-gradient-to-r from-[#E3F2FD] to-[#E8F5E9]"
       } border-t ${isDarkMode ? "border-[#084062]" : "border-gray-300"} shadow-lg`}
     >
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto" aria-label="Formulario de envío de mensaje">
@@ -104,10 +109,12 @@ const ChatInput = () => {
                   : "Escribe tu pregunta aquí..."
               }
               maxLength={1000}
-              disabled={showStop || isFlowActive}
+              disabled={isTyping || isFlowActive}
               className={`w-full ${
                 isDarkMode ? "bg-[#001a2e] text-white placeholder-gray-400" : "bg-white text-gray-900 placeholder-gray-500"
-              } border-2 ${isDarkMode ? "border-[#084062] focus:border-[#6EC971]" : "border-[#0582CA] focus:border-[#084062]"} rounded-2xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 ${
+              } border-2 ${
+                isDarkMode ? "border-[#084062] focus:border-[#6EC971]" : "border-[#0582CA] focus:border-[#084062]"
+              } rounded-2xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 ${
                 isDarkMode ? "focus:ring-[#6EC971]" : "focus:ring-[#0582CA]"
               } resize-none transition-all disabled:opacity-60 disabled:cursor-not-allowed`}
               style={{ minHeight: "52px", maxHeight: "120px" }}
@@ -115,35 +122,20 @@ const ChatInput = () => {
             />
           </div>
 
-          {showStop ? (
-            <button
-              type="button"
-              onClick={stopStreaming}
-              className={`${
-                isDarkMode ? "bg-white/10 hover:bg-white/20 text-white" : "bg-black/10 hover:bg-black/20 text-[#003D61]"
-              } p-3.5 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                isDarkMode ? "focus:ring-[#6EC971]" : "focus:ring-[#0582CA]"
-              } shadow-lg`}
-              aria-label="Detener respuesta"
-            >
-              <Square size={22} aria-hidden="true" />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={isFlowActive || inputValue.trim() === "" || inputValue.length > 1000}
-              className={`${
-                isDarkMode
-                  ? "bg-gradient-to-r from-[#195427] to-[#2d7a47] hover:from-[#2d7a47] hover:to-[#195427]"
-                  : "bg-gradient-to-r from-[#0582CA] to-[#084062] hover:from-[#084062] hover:to-[#0582CA]"
-              } text-white p-3.5 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                isDarkMode ? "focus:ring-[#6EC971]" : "focus:ring-[#0582CA]"
-              } shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none`}
-              aria-label="Enviar mensaje"
-            >
-              <Send size={22} aria-hidden="true" />
-            </button>
-          )}
+          <button
+            type="submit"
+            disabled={isFlowActive || inputValue.trim() === "" || inputValue.length > 1000 || isTyping}
+            className={`${
+              isDarkMode
+                ? "bg-gradient-to-r from-[#195427] to-[#2d7a47] hover:from-[#2d7a47] hover:to-[#195427]"
+                : "bg-gradient-to-r from-[#0582CA] to-[#084062] hover:from-[#084062] hover:to-[#0582CA]"
+            } text-white p-3.5 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              isDarkMode ? "focus:ring-[#6EC971]" : "focus:ring-[#0582CA]"
+            } shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none`}
+            aria-label="Enviar mensaje"
+          >
+            <Send size={22} aria-hidden="true" />
+          </button>
         </div>
 
         {inputError && (
