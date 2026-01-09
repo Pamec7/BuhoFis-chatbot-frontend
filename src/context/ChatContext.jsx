@@ -28,6 +28,28 @@ const loadFromSessionStorage = () => {
   }
 };
 
+const extractSources = (meta) => {
+  if (!meta) return [];
+  const payload = meta?.payload ?? meta;
+  const sources = payload?.sources ?? [];
+  if (!Array.isArray(sources)) return [];
+  return sources
+    .map((s) => ({
+      file_id: s?.file_id ?? s?.fileId ?? null,
+      file_name: s?.file_name ?? s?.fileName ?? null,
+      url: s?.url ?? s?.file_url ?? s?.fileUrl ?? null,
+      page: s?.page ?? null,
+      score: s?.score ?? null,
+    }))
+    .filter((s) => s.file_name || s.file_id || s.url);
+};
+
+const classifyError = (err) => {
+  const msg = String(err?.message || "");
+  const isNetwork = /Failed to fetch|NetworkError|ERR_NETWORK|fetch failed/i.test(msg);
+  return { msg, isNetwork };
+};
+
 export function ChatProvider({ children }) {
   const savedData = loadFromSessionStorage();
 
@@ -76,8 +98,7 @@ export function ChatProvider({ children }) {
           const isDefaultName = chat.name === "Nueva conversación";
           const userCount = chat.messages.filter((m) => m.type === MESSAGE_TYPES.USER).length;
 
-          const shouldRename =
-            isDefaultName && message.type === MESSAGE_TYPES.USER && userCount === 0;
+          const shouldRename = isDefaultName && message.type === MESSAGE_TYPES.USER && userCount === 0;
 
           return {
             ...chat,
@@ -106,6 +127,20 @@ export function ChatProvider({ children }) {
         id: Date.now(),
         type: MESSAGE_TYPES.BOT,
         content: "Selecciona una opción para continuar.",
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      const { msg, isNetwork } = classifyError(err);
+
+      addMessage({
+        id: Date.now(),
+        type: MESSAGE_TYPES.BOT,
+        variant: "error",
+        title: isNetwork ? "Error de conexión" : "Error del servidor",
+        content: isNetwork
+          ? "No pude conectarme al servidor para cargar las opciones guiadas.\nRevisa tu conexión/backend."
+          : "El servidor respondió con error al cargar las opciones guiadas.",
+        detail: msg || null,
         timestamp: new Date(),
       });
     } finally {
@@ -137,16 +172,43 @@ export function ChatProvider({ children }) {
 
         if (node.type === "answer") {
           setFlowOptions([]);
+
+          const rawFile =
+            node?.file_name ??
+            node?.fileName ??
+            node?.file ??
+            node?.filename ??
+            null;
+
+          const fileName = typeof rawFile === "string" ? rawFile.trim() : null;
+          const hasFile = !!(fileName && fileName.length > 0);
+
           addMessage({
             id: Date.now() + 1,
             type: MESSAGE_TYPES.BOT,
             content: node.answer || "Listo.",
             timestamp: new Date(),
-            fileName: node.file_name || null,
+            fileName: hasFile ? fileName : null,
+            fileMissing: !hasFile,
+            fileMissingVariant: "warning",
           });
         } else {
           setFlowOptions(node.options || []);
         }
+      } catch (err) {
+        const { msg, isNetwork } = classifyError(err);
+
+        addMessage({
+          id: Date.now() + 1,
+          type: MESSAGE_TYPES.BOT,
+          variant: "error",
+          title: isNetwork ? "Error de conexión" : "Error del servidor",
+          content: isNetwork
+            ? "No pude conectarme al servidor para completar esa consulta.\nRevisa tu conexión/backend."
+            : "El servidor respondió con error al completar esa consulta.",
+          detail: msg || null,
+          timestamp: new Date(),
+        });
       } finally {
         setIsFlowLoading(false);
         setIsTyping(false);
@@ -179,11 +241,25 @@ export function ChatProvider({ children }) {
       setFlowTitle(node.title || "Opciones guiadas");
       setFlowOptions(node.options || []);
       setFlowPath(newPath);
+    } catch (err) {
+      const { msg, isNetwork } = classifyError(err);
+
+      addMessage({
+        id: Date.now(),
+        type: MESSAGE_TYPES.BOT,
+        variant: "error",
+        title: isNetwork ? "Error de conexión" : "Error del servidor",
+        content: isNetwork
+          ? "No pude conectarme al servidor para volver atrás en el flujo.\nRevisa tu conexión/backend."
+          : "El servidor respondió con error al volver atrás en el flujo.",
+        detail: msg || null,
+        timestamp: new Date(),
+      });
     } finally {
       setIsFlowLoading(false);
       setIsTyping(false);
     }
-  }, [flowPath, startFlow]);
+  }, [flowPath, startFlow, addMessage]);
 
   const restartFlow = useCallback(async () => {
     await startFlow();
@@ -198,6 +274,8 @@ export function ChatProvider({ children }) {
     addMessage({
       id: Date.now(),
       type: MESSAGE_TYPES.BOT,
+      variant: "info",
+      title: "Modo chat libre",
       content: "Has salido de las opciones guiadas. Puedes escribir tu pregunta.",
       timestamp: new Date(),
     });
@@ -235,9 +313,11 @@ export function ChatProvider({ children }) {
         content: "",
         timestamp: new Date(),
         isStreaming: true,
+        sources: [],
       });
 
       let fullAnswer = "";
+      let lastSources = [];
 
       if (streamAbortRef.current) {
         try {
@@ -251,6 +331,35 @@ export function ChatProvider({ children }) {
       await askRagStream(
         content,
         {
+          onMetadata: (meta) => {
+            const sources = extractSources(meta);
+            if (!sources.length) return;
+
+            const key = (s) => `${s.file_id || ""}::${s.file_name || ""}::${s.url || ""}::${s.page || ""}`;
+            const merged = [...lastSources, ...sources];
+            const uniq = [];
+            const seen = new Set();
+            for (const s of merged) {
+              const k = key(s);
+              if (seen.has(k)) continue;
+              seen.add(k);
+              uniq.push(s);
+            }
+            lastSources = uniq;
+
+            setChats((prev) =>
+              prev.map((chat) =>
+                chat.id === activeChat
+                  ? {
+                      ...chat,
+                      messages: chat.messages.map((m) =>
+                        m.id === botId ? { ...m, sources: lastSources } : m
+                      ),
+                    }
+                  : chat
+              )
+            );
+          },
           onMessage: (fragment) => {
             fullAnswer += fragment;
             setChats((prev) =>
@@ -277,7 +386,7 @@ export function ChatProvider({ children }) {
                   ? {
                       ...chat,
                       messages: chat.messages.map((m) =>
-                        m.id === botId ? { ...m, isStreaming: false } : m
+                        m.id === botId ? { ...m, isStreaming: false, sources: lastSources } : m
                       ),
                     }
                   : chat
@@ -297,7 +406,12 @@ export function ChatProvider({ children }) {
                       ...chat,
                       messages: chat.messages.map((m) =>
                         m.id === currentBotId
-                          ? { ...m, isStreaming: false, content: (m.content || fullAnswer || "").trimEnd() }
+                          ? {
+                              ...m,
+                              isStreaming: false,
+                              content: (m.content || fullAnswer || "").trimEnd(),
+                              sources: lastSources,
+                            }
                           : m
                       ),
                     }
@@ -308,6 +422,8 @@ export function ChatProvider({ children }) {
           onError: (err) => {
             streamAbortRef.current = null;
             streamingBotIdRef.current = null;
+
+            const { msg, isNetwork } = classifyError(err);
 
             setIsTyping(false);
             setChats((prev) =>
@@ -320,7 +436,13 @@ export function ChatProvider({ children }) {
                           ? {
                               ...m,
                               isStreaming: false,
-                              content: "No pude conectarme al backend.\n\n" + (err?.message || String(err)),
+                              variant: "error",
+                              title: isNetwork ? "Error de conexión" : "Error del servidor",
+                              content: isNetwork
+                                ? "No pude conectarme al servidor.\nRevisa tu conexión/backend."
+                                : "El servidor respondió con error.",
+                              detail: msg || null,
+                              sources: lastSources,
                             }
                           : m
                       ),
