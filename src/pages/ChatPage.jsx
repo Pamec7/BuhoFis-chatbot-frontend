@@ -1,3 +1,4 @@
+// src/pages/ChatPage.jsx
 import React from "react";
 import BUHOALADARK from "../assets/BUHOALADARK.png";
 import BUHOALALIGHT from "../assets/BUHOALALIGHT.png";
@@ -21,8 +22,6 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
   const {
     messages,
     isTyping,
-
-    // flujo
     startFlow,
     pickFlowOption,
     flowOptions,
@@ -34,18 +33,26 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
     flowPath,
   } = useChat();
 
-  const [isSidebarOpen, setIsSidebarOpen] = React.useState(() => window.innerWidth >= 768);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
+
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = React.useState(() => {
+    const saved = localStorage.getItem("fiswize_sidebar_collapsed");
+    if (saved === "0") return false;
+    return true;
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem("fiswize_sidebar_collapsed", isDesktopSidebarCollapsed ? "1" : "0");
+  }, [isDesktopSidebarCollapsed]);
 
   React.useEffect(() => {
     const onResize = () => {
-      if (window.innerWidth >= 768) setIsSidebarOpen(true);
-      else setIsSidebarOpen(false);
+      if (window.innerWidth < 768) setIsMobileSidebarOpen(false);
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // SCROLL REFS
   const scrollContainerRef = React.useRef(null);
   const messagesTopRef = React.useRef(null);
   const messagesEndRef = React.useRef(null);
@@ -65,8 +72,7 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
 
     setShowScrollDown(distanceFromBottom > 150);
     setIsNearBottom(distanceFromBottom < 220);
@@ -74,14 +80,9 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
 
   const lastMessageContent = messages[messages.length - 1]?.content;
 
-  // Auto-scroll 
   React.useLayoutEffect(() => {
-    // Cuando NO hay mensajes (pantalla inicial)
     if (messages.length === 0) return;
-
-    if (isNearBottom || isTyping) {
-      scrollToBottom();
-    }
+    if (isNearBottom || isTyping) scrollToBottom();
   }, [messages.length, lastMessageContent, isTyping, isNearBottom, scrollToBottom]);
 
   const showWelcome = messages.length === 0;
@@ -97,32 +98,32 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
       <NavBar
         currentPage="chat"
         onNavigate={onNavigate}
-        onToggleSidebar={() => setIsSidebarOpen((v) => !v)}
-        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsMobileSidebarOpen((v) => !v)}
+        isSidebarOpen={isMobileSidebarOpen}
       />
 
       <div className="flex h-[calc(100vh-72px)]">
         <Sidebar
-          isOpen={isSidebarOpen}
-          onToggle={() => setIsSidebarOpen((v) => !v)}
+          isMobileOpen={isMobileSidebarOpen}
+          onToggleMobile={() => setIsMobileSidebarOpen((v) => !v)}
+          isDesktopCollapsed={isDesktopSidebarCollapsed}
+          onToggleDesktopCollapsed={() => setIsDesktopSidebarCollapsed((v) => !v)}
           onNewChat={onNewChat}
         />
 
         <main className="flex-1 flex flex-col relative" role="main">
-          {/*  */}
           <FlowOptionsBar
             title={flowTitle}
-            options={flowPath ? flowOptions : []} // solo muestra opciones cuando flowPath existe
+            options={flowPath ? flowOptions : []}
             onPick={pickFlowOption}
             isLoading={isFlowLoading}
             onExitFlow={exitFlow}
             onRestartFlow={restartFlow}
-            onStartFlow={startFlow} 
+            onStartFlow={startFlow}
             onBackFlow={backFlow}
             isFlowActive={!!flowPath}
           />
 
-          {/* Área de mensajes */}
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
@@ -158,9 +159,7 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
                       <span role="img" aria-label="idea" className="text-2xl">
                         💡
                       </span>
-                      <p className="font-medium">
-                        Escribe tu pregunta o usa “Opciones guiadas” arriba.
-                      </p>
+                      <p className="font-medium">Escribe tu pregunta o usa “Opciones guiadas” arriba.</p>
                     </div>
                   </div>
                 </motion.div>
@@ -179,7 +178,6 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* */}
             <div className="hidden md:block fixed bottom-24 right-6 pointer-events-none z-40" aria-hidden="true">
               <motion.img
                 initial={{ opacity: 0, scale: 0.8 }}
@@ -193,7 +191,6 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
             </div>
           </div>
 
-          {/* Botón subir */}
           <button
             onClick={scrollToTop}
             className="fixed bottom-40 right-4 md:right-6 z-50 p-3 rounded-full shadow-lg transition-all bg-[#084062] text-white hover:bg-[#0582CA]"
@@ -203,7 +200,6 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
             <ArrowUp size={20} />
           </button>
 
-          {/* Botón bajar */}
           {showScrollDown && (
             <button
               onClick={scrollToBottom}

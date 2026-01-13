@@ -1,7 +1,9 @@
+// src/context/ChatContext.jsx
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { MESSAGE_TYPES } from "../utils/constants";
 import { askRagStream } from "../Services/ragService";
 import { getNavigationRoot, getNavigationNext } from "../Services/navigationService";
+import { FLOW_TREE, resolveNodeByPath } from "../mocks/mockApiData";
 
 const ChatContext = createContext();
 const STORAGE_KEY = "fiswize_chat_data";
@@ -74,6 +76,9 @@ export function ChatProvider({ children }) {
   const [flowTitle, setFlowTitle] = useState("Opciones guiadas");
   const [isFlowLoading, setIsFlowLoading] = useState(false);
 
+  const [backendMode, setBackendMode] = useState("unknown");
+  const offlineNoticeRef = useRef(false);
+
   const streamAbortRef = useRef(null);
   const streamingBotIdRef = useRef(null);
 
@@ -123,6 +128,97 @@ export function ChatProvider({ children }) {
           };
         })
       );
+    },
+    [activeChat]
+  );
+
+  const markOfflineOnce = useCallback(() => {
+    setBackendMode("offline");
+    if (offlineNoticeRef.current) return;
+    offlineNoticeRef.current = true;
+
+    addMessage({
+      id: Date.now(),
+      type: MESSAGE_TYPES.BOT,
+      variant: "info",
+      title: "Modo sin conexión",
+      content:
+        "Estoy teniendo problemas para conectar con el backend.\nMientras tanto, usaré respuestas de demostración para que el chat siga funcionando.",
+      timestamp: new Date(),
+    });
+  }, [addMessage]);
+
+  const markOnline = useCallback(() => {
+    setBackendMode("online");
+  }, []);
+
+  const startMockRagStream = useCallback(
+    ({ question, botId }) => {
+      const tokens = [
+        `Respuesta simulada para: "${question}". `,
+        "Este es un ejemplo. ",
+        "Cuando el backend esté disponible, la respuesta vendrá del RAG.",
+      ];
+
+      const meta = {
+        payload: {
+          sources: [
+            { file_name: "mock_doc_practicas.pdf", page: 1 },
+            { file_name: "mock_doc_matricula.pdf", page: 2 },
+            { file_name: "mock_doc_general.pdf", page: 1 },
+          ],
+        },
+      };
+
+      const sources = extractSources(meta);
+
+      setIsTyping(true);
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === activeChat
+            ? {
+                ...chat,
+                messages: chat.messages.map((m) => (m.id === botId ? { ...m, sources } : m)),
+              }
+            : chat
+        )
+      );
+
+      let i = 0;
+      let full = "";
+
+      const interval = setInterval(() => {
+        if (i < tokens.length) {
+          full += tokens[i];
+          setChats((prev) =>
+            prev.map((chat) =>
+              chat.id === activeChat
+                ? {
+                    ...chat,
+                    messages: chat.messages.map((m) => (m.id === botId ? { ...m, content: full } : m)),
+                  }
+                : chat
+            )
+          );
+          i++;
+        } else {
+          clearInterval(interval);
+          setIsTyping(false);
+          setChats((prev) =>
+            prev.map((chat) =>
+              chat.id === activeChat
+                ? {
+                    ...chat,
+                    messages: chat.messages.map((m) =>
+                      m.id === botId ? { ...m, isStreaming: false, sources } : m
+                    ),
+                  }
+                : chat
+            )
+          );
+        }
+      }, 220);
     },
     [activeChat]
   );
@@ -185,6 +281,7 @@ export function ChatProvider({ children }) {
 
     try {
       const root = await getNavigationRoot();
+      markOnline();
       setFlowTitle("Opciones guiadas");
       setFlowOptions(root.options || []);
       setFlowPath([]);
@@ -198,22 +295,34 @@ export function ChatProvider({ children }) {
     } catch (err) {
       const { msg, isNetwork } = classifyError(err);
 
-      addMessage({
-        id: Date.now(),
-        type: MESSAGE_TYPES.BOT,
-        variant: "error",
-        title: isNetwork ? "Error de conexión" : "Error del servidor",
-        content: isNetwork
-          ? "No pude conectarme al servidor para cargar las opciones guiadas.\nRevisa tu conexión o la URL del backend."
-          : "El servidor respondió con error al cargar las opciones guiadas.",
-        detail: msg || null,
-        timestamp: new Date(),
-      });
+      if (isNetwork) {
+        markOfflineOnce();
+        setFlowTitle("Opciones guiadas");
+        setFlowOptions(FLOW_TREE.options || []);
+        setFlowPath([]);
+
+        addMessage({
+          id: Date.now(),
+          type: MESSAGE_TYPES.BOT,
+          content: "Selecciona una opción para continuar.",
+          timestamp: new Date(),
+        });
+      } else {
+        addMessage({
+          id: Date.now(),
+          type: MESSAGE_TYPES.BOT,
+          variant: "error",
+          title: "Error del servidor",
+          content: "El servidor respondió con error al cargar las opciones guiadas.",
+          detail: msg || null,
+          timestamp: new Date(),
+        });
+      }
     } finally {
       setIsFlowLoading(false);
       setIsTyping(false);
     }
-  }, [addMessage]);
+  }, [addMessage, markOfflineOnce, markOnline]);
 
   const pickFlowOption = useCallback(
     async (optionId, optionLabel) => {
@@ -231,7 +340,17 @@ export function ChatProvider({ children }) {
 
       try {
         const newPath = [...(flowPath || []), optionId];
-        const node = await getNavigationNext(newPath);
+
+        let node;
+        try {
+          node = await getNavigationNext(newPath);
+          markOnline();
+        } catch (err) {
+          const { isNetwork } = classifyError(err);
+          if (!isNetwork) throw err;
+          markOfflineOnce();
+          node = resolveNodeByPath(newPath);
+        }
 
         setFlowTitle(node.title || "Opciones guiadas");
         setFlowPath(newPath);
@@ -239,8 +358,7 @@ export function ChatProvider({ children }) {
         if (node.type === "answer") {
           setFlowOptions([]);
 
-          const rawFile =
-            node?.file_name ?? node?.fileName ?? node?.file ?? node?.filename ?? null;
+          const rawFile = node?.file_name ?? node?.fileName ?? node?.file ?? node?.filename ?? null;
 
           const fileName = typeof rawFile === "string" ? rawFile.trim() : null;
           const hasFile = !!(fileName && fileName.length > 0);
@@ -276,7 +394,7 @@ export function ChatProvider({ children }) {
         setIsTyping(false);
       }
     },
-    [addMessage, flowPath, isFlowLoading]
+    [addMessage, flowPath, isFlowLoading, markOfflineOnce, markOnline]
   );
 
   const backFlow = useCallback(async () => {
@@ -292,14 +410,37 @@ export function ChatProvider({ children }) {
       const newPath = flowPath.slice(0, -1);
 
       if (newPath.length === 0) {
-        const root = await getNavigationRoot();
-        setFlowTitle("Opciones guiadas");
-        setFlowOptions(root.options || []);
-        setFlowPath([]);
+        try {
+          const root = await getNavigationRoot();
+          markOnline();
+          setFlowTitle("Opciones guiadas");
+          setFlowOptions(root.options || []);
+          setFlowPath([]);
+        } catch (err) {
+          const { isNetwork } = classifyError(err);
+          if (isNetwork) {
+            markOfflineOnce();
+            setFlowTitle("Opciones guiadas");
+            setFlowOptions(FLOW_TREE.options || []);
+            setFlowPath([]);
+          } else {
+            throw err;
+          }
+        }
         return;
       }
 
-      const node = await getNavigationNext(newPath);
+      let node;
+      try {
+        node = await getNavigationNext(newPath);
+        markOnline();
+      } catch (err) {
+        const { isNetwork } = classifyError(err);
+        if (!isNetwork) throw err;
+        markOfflineOnce();
+        node = resolveNodeByPath(newPath);
+      }
+
       setFlowTitle(node.title || "Opciones guiadas");
       setFlowOptions(node.options || []);
       setFlowPath(newPath);
@@ -321,7 +462,7 @@ export function ChatProvider({ children }) {
       setIsFlowLoading(false);
       setIsTyping(false);
     }
-  }, [flowPath, startFlow, addMessage]);
+  }, [flowPath, startFlow, addMessage, markOfflineOnce, markOnline]);
 
   const restartFlow = useCallback(async () => {
     await startFlow();
@@ -405,9 +546,7 @@ export function ChatProvider({ children }) {
                 chat.id === activeChat
                   ? {
                       ...chat,
-                      messages: chat.messages.map((m) =>
-                        m.id === botId ? { ...m, sources: lastSources } : m
-                      ),
+                      messages: chat.messages.map((m) => (m.id === botId ? { ...m, sources: lastSources } : m)),
                     }
                   : chat
               )
@@ -420,9 +559,7 @@ export function ChatProvider({ children }) {
                 chat.id === activeChat
                   ? {
                       ...chat,
-                      messages: chat.messages.map((m) =>
-                        m.id === botId ? { ...m, content: fullAnswer } : m
-                      ),
+                      messages: chat.messages.map((m) => (m.id === botId ? { ...m, content: fullAnswer } : m)),
                     }
                   : chat
               )
@@ -445,6 +582,7 @@ export function ChatProvider({ children }) {
                   : chat
               )
             );
+            markOnline();
           },
           onAbort: () => {
             streamAbortRef.current = null;
@@ -478,6 +616,26 @@ export function ChatProvider({ children }) {
 
             const { msg, isNetwork } = classifyError(err);
 
+            if (isNetwork) {
+              markOfflineOnce();
+
+              setChats((prev) =>
+                prev.map((chat) =>
+                  chat.id === activeChat
+                    ? {
+                        ...chat,
+                        messages: chat.messages.map((m) =>
+                          m.id === botId ? { ...m, isStreaming: true, content: "" } : m
+                        ),
+                      }
+                    : chat
+                )
+              );
+
+              startMockRagStream({ question: content, botId });
+              return;
+            }
+
             setIsTyping(false);
             setChats((prev) =>
               prev.map((chat) =>
@@ -490,10 +648,8 @@ export function ChatProvider({ children }) {
                               ...m,
                               isStreaming: false,
                               variant: "error",
-                              title: isNetwork ? "Error de conexión" : "Error del servidor",
-                              content: isNetwork
-                                ? "No pude conectarme al servidor.\nRevisa tu conexión o la URL del backend."
-                                : "El servidor respondió con error.",
+                              title: "Error del servidor",
+                              content: "El servidor respondió con error.",
                               detail: msg || null,
                               sources: lastSources,
                             }
@@ -509,7 +665,7 @@ export function ChatProvider({ children }) {
         controller.signal
       );
     },
-    [addMessage, activeChat, isTyping, flowPath]
+    [addMessage, activeChat, isTyping, flowPath, markOfflineOnce, markOnline, startMockRagStream]
   );
 
   const createNewChat = useCallback(() => {
@@ -559,6 +715,7 @@ export function ChatProvider({ children }) {
         switchChat,
         deleteChat,
         clearAllChats,
+        backendMode,
       }}
     >
       {children}
