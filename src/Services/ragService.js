@@ -71,3 +71,4 @@ export async function askRagStream(question, callbacks = {}, optimize_query = tr
     onError?.(err);
   }
 }
+

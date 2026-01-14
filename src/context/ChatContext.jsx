@@ -6,7 +6,7 @@ import { getNavigationRoot, getNavigationNext } from "../Services/navigationServ
 import { FLOW_TREE, resolveNodeByPath } from "../mocks/mockApiData";
 
 const ChatContext = createContext();
-const STORAGE_KEY = "fiswize_chat_data";
+const STORAGE_KEY = "buhoFis_chat_data";
 
 const loadFromSessionStorage = () => {
   try {
@@ -231,7 +231,7 @@ export function ChatProvider({ children }) {
       setFlowTitle("Opciones guiadas");
       setIsFlowLoading(false);
       setInputValue(text || "");
-      window.dispatchEvent(new Event("fiswize:focus-input"));
+      window.dispatchEvent(new Event("buhoFis:focus-input"));
     },
     [stopStreaming]
   );
