@@ -1,23 +1,17 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, AlertTriangle, AlertCircle, XCircle, Info, ExternalLink } from "lucide-react";
+import { Copy, AlertTriangle, AlertCircle, XCircle, Info, ExternalLink, Download } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 
 const badgeStyle = (variant, isDarkMode) => {
   if (variant === "error") {
-    return isDarkMode
-      ? "bg-red-500/15 text-red-200 border border-red-500/30"
-      : "bg-red-50 text-red-800 border border-red-200";
+    return isDarkMode ? "bg-red-500/15 text-red-200 border border-red-500/30" : "bg-red-50 text-red-800 border border-red-200";
   }
   if (variant === "warning") {
-    return isDarkMode
-      ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/30"
-      : "bg-[#E3F2FD] text-[#003554] border border-[#0582CA]/25";
+    return isDarkMode ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/30" : "bg-[#E3F2FD] text-[#003554] border border-[#0582CA]/25";
   }
   if (variant === "info") {
-    return isDarkMode
-      ? "bg-blue-500/15 text-blue-200 border border-blue-500/30"
-      : "bg-blue-50 text-blue-800 border border-blue-200";
+    return isDarkMode ? "bg-blue-500/15 text-blue-200 border border-blue-500/30" : "bg-blue-50 text-blue-800 border border-blue-200";
   }
   return "";
 };
@@ -32,6 +26,7 @@ const iconForVariant = (variant) => {
 const MessageBubble = ({ message }) => {
   const { isDarkMode } = useTheme();
   const [copied, setCopied] = useState(false);
+  const [downloadingKey, setDownloadingKey] = useState(null);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(message.content || "");
@@ -39,18 +34,12 @@ const MessageBubble = ({ message }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const safeFileName =
-    typeof message.fileName === "string" && message.fileName.trim().length > 0
-      ? message.fileName.trim()
-      : null;
+  const safeFileName = typeof message.fileName === "string" && message.fileName.trim().length > 0 ? message.fileName.trim() : null;
 
   const sources = Array.isArray(message.sources) ? message.sources : [];
   const showFileMissing = message.type !== "user" && message.fileMissing && !safeFileName;
 
-  const isAlert =
-    message.type !== "user" &&
-    (message.variant === "error" || message.variant === "warning" || message.variant === "info");
-
+  const isAlert = message.type !== "user" && (message.variant === "error" || message.variant === "warning" || message.variant === "info");
   const AlertIcon = isAlert ? iconForVariant(message.variant) : null;
 
   const bubbleClass =
@@ -64,31 +53,34 @@ const MessageBubble = ({ message }) => {
       ? "bg-gradient-to-br from-[#0b5e8e] to-[#165177]"
       : "bg-gradient-to-br from-[#93ebaf] to-[#95eec4]";
 
-  const textClass =
-    message.type === "user"
-      ? "text-white"
-      : isAlert
-      ? ""
-      : isDarkMode
-      ? "text-white"
-      : "text-[#003D61]";
+  const textClass = message.type === "user" ? "text-white" : isAlert ? "" : isDarkMode ? "text-white" : "text-[#003D61]";
 
-  const docMissingClass = isDarkMode
-    ? "bg-yellow-500/10 text-yellow-200 border border-yellow-500/20"
-    : "bg-white/60 text-[#003554] border border-black/10";
-
+  const docMissingClass = isDarkMode ? "bg-yellow-500/10 text-yellow-200 border border-yellow-500/20" : "bg-white/60 text-[#003554] border border-black/10";
   const docMissingIconClass = isDarkMode ? "text-yellow-200" : "text-[#0582CA]";
+
+  const downloadFile = async (url, filename, key) => {
+    if (!url) return;
+    setDownloadingKey(key);
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename || "documento";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+    } finally {
+      setDownloadingKey(null);
+    }
+  };
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0 }}
-        className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
-        tabIndex={0}
-        role="article"
-      >
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`} tabIndex={0} role="article">
         <article className={`relative max-w-[92%] sm:max-w-[75%] rounded-2xl p-4 shadow-md break-words ${bubbleClass}`}>
           {isAlert && (
             <div className="flex items-start gap-2 mb-2">
@@ -97,14 +89,10 @@ const MessageBubble = ({ message }) => {
             </div>
           )}
 
-          <p className={`${textClass} text-base leading-relaxed whitespace-pre-wrap break-words overflow-wrap-anywhere`}>
-            {message.content}
-          </p>
+          <p className={`${textClass} text-base leading-relaxed whitespace-pre-wrap break-words overflow-wrap-anywhere`}>{message.content}</p>
 
           {message.detail ? (
-            <p className={`mt-2 text-xs ${isAlert ? "opacity-80" : isDarkMode ? "text-white/70" : "text-black/60"}`}>
-              Detalle: {message.detail}
-            </p>
+            <p className={`mt-2 text-xs ${isAlert ? "opacity-80" : isDarkMode ? "text-white/70" : "text-black/60"}`}>Detalle: {message.detail}</p>
           ) : null}
 
           {safeFileName && (
@@ -125,43 +113,58 @@ const MessageBubble = ({ message }) => {
 
           {message.type !== "user" && sources.length > 0 && (
             <div className={`mt-3 rounded-xl p-3 ${isDarkMode ? "bg-white/10" : "bg-black/5"}`}>
-              <p className={`text-xs font-semibold ${isDarkMode ? "text-[#B3E5FC]" : "text-[#003554]"}`}>
-                Fuentes / Documentos:
-              </p>
+              <p className={`text-xs font-semibold ${isDarkMode ? "text-[#B3E5FC]" : "text-[#003554]"}`}>Fuentes / Documentos:</p>
 
-              <ul className="mt-2 space-y-1">
+              <ul className="mt-2 space-y-2">
                 {sources.slice(0, 6).map((s, idx) => {
-                  const label = s.file_name || s.file_id || `Fuente ${idx + 1}`;
-                  const extra = s.page ? ` (p. ${s.page})` : "";
+                  const label = s.display_name || s.file_name || s.file_id || `Fuente ${idx + 1}`;
+                  const extra =
+                    s.page != null
+                      ? ` (p. ${s.page})`
+                      : s.chunk_index != null
+                      ? ` (chunk ${s.chunk_index})`
+                      : "";
+
+                  const downloadName = (s.download_name || s.file_name || s.display_name || label || "documento").toString();
+
+                  const key = `${label}-${idx}`;
+
                   return (
-                    <li key={`${label}-${idx}`} className="flex items-center justify-between gap-2">
+                    <li key={key} className="flex items-center justify-between gap-3">
                       <span className={`text-xs ${isDarkMode ? "text-white/90" : "text-[#003D61]"}`}>
                         {label}
                         {extra}
                       </span>
 
-                      {s.url ? (
-                        <a
-                          href={s.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={`text-xs flex items-center gap-1 ${
-                            isDarkMode ? "text-[#CCFFCE]" : "text-[#084062]"
-                          } hover:underline`}
-                        >
-                          Abrir <ExternalLink size={14} />
-                        </a>
-                      ) : null}
+                      <div className="flex items-center gap-3 shrink-0">
+                        {s.url ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => downloadFile(s.url, downloadName, key)}
+                              disabled={downloadingKey === key}
+                              className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-[#CCFFCE]" : "text-[#084062]"} hover:underline disabled:opacity-60`}
+                            >
+                              {downloadingKey === key ? "Descargando..." : "Descargar"} <Download size={14} />
+                            </button>
+
+                            <a
+                              href={s.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-[#CCFFCE]" : "text-[#084062]"} hover:underline`}
+                            >
+                              Abrir <ExternalLink size={14} />
+                            </a>
+                          </>
+                        ) : null}
+                      </div>
                     </li>
                   );
                 })}
               </ul>
 
-              {sources.length > 6 && (
-                <p className={`mt-2 text-[11px] ${isDarkMode ? "text-white/60" : "text-black/50"}`}>
-                  +{sources.length - 6} fuentes más
-                </p>
-              )}
+              {sources.length > 6 && <p className={`mt-2 text-[11px] ${isDarkMode ? "text-white/60" : "text-black/50"}`}>+{sources.length - 6} fuentes más</p>}
             </div>
           )}
 
@@ -193,11 +196,7 @@ const MessageBubble = ({ message }) => {
             transition={{ duration: 0.3 }}
             className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
           >
-            <div
-              className={`px-5 py-3 rounded-2xl shadow-lg text-base font-semibold backdrop-blur-md bg-opacity-90 ${
-                isDarkMode ? "bg-[#195427]/90 text-[#CCFFCE]" : "bg-[#0582CA]/90 text-white"
-              }`}
-            >
+            <div className={`px-5 py-3 rounded-2xl shadow-lg text-base font-semibold backdrop-blur-md bg-opacity-90 ${isDarkMode ? "bg-[#195427]/90 text-[#CCFFCE]" : "bg-[#0582CA]/90 text-white"}`}>
               TEXTO COPIADO ✅
             </div>
           </motion.div>

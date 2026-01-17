@@ -27,3 +27,16 @@ export async function apiFetch(path, { method = "GET", body, headers, signal } =
   return res;
 }
 
+export async function pingBackend({ timeoutMs = 3500 } = {}) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    await apiFetch("/navigation", { method: "GET", signal: controller.signal });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}

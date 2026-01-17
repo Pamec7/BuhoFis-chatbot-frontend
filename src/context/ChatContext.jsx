@@ -1,9 +1,9 @@
-// src/context/ChatContext.jsx
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { MESSAGE_TYPES } from "../utils/constants";
 import { askRagStream } from "../Services/ragService";
 import { getNavigationRoot, getNavigationNext } from "../Services/navigationService";
 import { FLOW_TREE, resolveNodeByPath } from "../mocks/mockApiData";
+import { pingBackend } from "../Services/apiClient";
 
 const ChatContext = createContext();
 const STORAGE_KEY = "buhoFis_chat_data";
@@ -35,15 +35,49 @@ const extractSources = (meta) => {
   const payload = meta?.payload ?? meta;
   const sources = payload?.sources ?? [];
   if (!Array.isArray(sources)) return [];
+
+  const nameFromUrl = (url) => {
+    try {
+      const u = new URL(url);
+      const last = u.pathname.split("/").filter(Boolean).pop();
+      if (!last) return null;
+      return decodeURIComponent(last);
+    } catch {
+      return null;
+    }
+  };
+
   return sources
-    .map((s) => ({
-      file_id: s?.file_id ?? s?.fileId ?? null,
-      file_name: s?.file_name ?? s?.fileName ?? null,
-      url: s?.url ?? s?.file_url ?? s?.fileUrl ?? null,
-      page: s?.page ?? null,
-      score: s?.score ?? null,
-    }))
-    .filter((s) => s.file_name || s.file_id || s.url);
+    .map((s) => {
+      if (typeof s === "string") {
+        const fileName = s.trim();
+        const display_name = fileName || null;
+        return {
+          file_id: null,
+          file_name: fileName || null,
+          url: null,
+          chunk_index: null,
+          page: null,
+          score: null,
+          display_name,
+          download_name: display_name,
+        };
+      }
+
+      const file_id = s?.file_id ?? s?.fileId ?? null;
+      const file_name = s?.file_name ?? s?.fileName ?? null;
+      const url = s?.url ?? s?.file_url ?? s?.fileUrl ?? null;
+      const chunk_index = s?.chunk_index ?? s?.chunkIndex ?? null;
+      const page = s?.page ?? null;
+      const score = s?.score ?? null;
+
+      const derived = !file_name && url ? nameFromUrl(url) : null;
+      const display_name = (file_name || derived || file_id || "").toString().trim() || null;
+      const download_name = (file_name || derived || display_name || "documento").toString().trim() || "documento";
+
+      return { file_id, file_name, url, chunk_index, page, score, display_name, download_name };
+    })
+    .filter((x) => x.display_name || x.url);
 };
 
 const classifyError = (err) => {
@@ -100,6 +134,24 @@ export function ChatProvider({ children }) {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [chats, activeChat]);
 
+  useEffect(() => {
+    let alive = true;
+
+    const check = async () => {
+      const ok = await pingBackend({ timeoutMs: 3500 });
+      if (!alive) return;
+      setBackendMode(ok ? "online" : "offline");
+    };
+
+    check();
+    const id = setInterval(check, 25000);
+
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
   const stopStreaming = useCallback(() => {
     const controller = streamAbortRef.current;
     if (controller) {
@@ -122,9 +174,7 @@ export function ChatProvider({ children }) {
           return {
             ...chat,
             messages: [...chat.messages, message],
-            name: shouldRename
-              ? message.content.slice(0, 30) + (message.content.length > 30 ? "..." : "")
-              : chat.name,
+            name: shouldRename ? message.content.slice(0, 30) + (message.content.length > 30 ? "..." : "") : chat.name,
           };
         })
       );
@@ -163,9 +213,9 @@ export function ChatProvider({ children }) {
       const meta = {
         payload: {
           sources: [
-            { file_name: "mock_doc_practicas.pdf", page: 1 },
-            { file_name: "mock_doc_matricula.pdf", page: 2 },
-            { file_name: "mock_doc_general.pdf", page: 1 },
+            { file_name: "mock_doc_practicas.pdf", chunk_index: 1, score: 0.6, file_id: "mock-1" },
+            { file_name: "mock_doc_matricula.pdf", chunk_index: 2, score: 0.55, file_id: "mock-2" },
+            { file_name: "mock_doc_general.pdf", chunk_index: 1, score: 0.52, file_id: "mock-3" },
           ],
         },
       };
@@ -177,10 +227,7 @@ export function ChatProvider({ children }) {
       setChats((prev) =>
         prev.map((chat) =>
           chat.id === activeChat
-            ? {
-                ...chat,
-                messages: chat.messages.map((m) => (m.id === botId ? { ...m, sources } : m)),
-              }
+            ? { ...chat, messages: chat.messages.map((m) => (m.id === botId ? { ...m, sources } : m)) }
             : chat
         )
       );
@@ -194,10 +241,7 @@ export function ChatProvider({ children }) {
           setChats((prev) =>
             prev.map((chat) =>
               chat.id === activeChat
-                ? {
-                    ...chat,
-                    messages: chat.messages.map((m) => (m.id === botId ? { ...m, content: full } : m)),
-                  }
+                ? { ...chat, messages: chat.messages.map((m) => (m.id === botId ? { ...m, content: full } : m)) }
                 : chat
             )
           );
@@ -210,9 +254,7 @@ export function ChatProvider({ children }) {
               chat.id === activeChat
                 ? {
                     ...chat,
-                    messages: chat.messages.map((m) =>
-                      m.id === botId ? { ...m, isStreaming: false, sources } : m
-                    ),
+                    messages: chat.messages.map((m) => (m.id === botId ? { ...m, isStreaming: false, sources } : m)),
                   }
                 : chat
             )
@@ -359,7 +401,6 @@ export function ChatProvider({ children }) {
           setFlowOptions([]);
 
           const rawFile = node?.file_name ?? node?.fileName ?? node?.file ?? node?.filename ?? null;
-
           const fileName = typeof rawFile === "string" ? rawFile.trim() : null;
           const hasFile = !!(fileName && fileName.length > 0);
 
@@ -529,7 +570,9 @@ export function ChatProvider({ children }) {
             const sources = extractSources(meta);
             if (!sources.length) return;
 
-            const key = (s) => `${s.file_id || ""}::${s.file_name || ""}::${s.url || ""}::${s.page || ""}`;
+            const key = (s) =>
+              `${s.file_id || ""}::${s.file_name || ""}::${s.url || ""}::${s.chunk_index || ""}::${s.page || ""}`;
+
             const merged = [...lastSources, ...sources];
             const uniq = [];
             const seen = new Set();
@@ -544,10 +587,7 @@ export function ChatProvider({ children }) {
             setChats((prev) =>
               prev.map((chat) =>
                 chat.id === activeChat
-                  ? {
-                      ...chat,
-                      messages: chat.messages.map((m) => (m.id === botId ? { ...m, sources: lastSources } : m)),
-                    }
+                  ? { ...chat, messages: chat.messages.map((m) => (m.id === botId ? { ...m, sources: lastSources } : m)) }
                   : chat
               )
             );
@@ -557,10 +597,7 @@ export function ChatProvider({ children }) {
             setChats((prev) =>
               prev.map((chat) =>
                 chat.id === activeChat
-                  ? {
-                      ...chat,
-                      messages: chat.messages.map((m) => (m.id === botId ? { ...m, content: fullAnswer } : m)),
-                    }
+                  ? { ...chat, messages: chat.messages.map((m) => (m.id === botId ? { ...m, content: fullAnswer } : m)) }
                   : chat
               )
             );
@@ -575,9 +612,7 @@ export function ChatProvider({ children }) {
                 chat.id === activeChat
                   ? {
                       ...chat,
-                      messages: chat.messages.map((m) =>
-                        m.id === botId ? { ...m, isStreaming: false, sources: lastSources } : m
-                      ),
+                      messages: chat.messages.map((m) => (m.id === botId ? { ...m, isStreaming: false, sources: lastSources } : m)),
                     }
                   : chat
               )
@@ -597,12 +632,7 @@ export function ChatProvider({ children }) {
                       ...chat,
                       messages: chat.messages.map((m) =>
                         m.id === currentBotId
-                          ? {
-                              ...m,
-                              isStreaming: false,
-                              content: (m.content || fullAnswer || "").trimEnd(),
-                              sources: lastSources,
-                            }
+                          ? { ...m, isStreaming: false, content: (m.content || fullAnswer || "").trimEnd(), sources: lastSources }
                           : m
                       ),
                     }
@@ -622,12 +652,7 @@ export function ChatProvider({ children }) {
               setChats((prev) =>
                 prev.map((chat) =>
                   chat.id === activeChat
-                    ? {
-                        ...chat,
-                        messages: chat.messages.map((m) =>
-                          m.id === botId ? { ...m, isStreaming: true, content: "" } : m
-                        ),
-                      }
+                    ? { ...chat, messages: chat.messages.map((m) => (m.id === botId ? { ...m, isStreaming: true, content: "" } : m)) }
                     : chat
                 )
               );
