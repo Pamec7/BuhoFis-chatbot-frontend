@@ -1,6 +1,6 @@
 const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-function buildUrl(path) {
+export function buildUrl(path) {
   if (!RAW_BASE_URL) throw new Error("VITE_API_BASE_URL no está definido.");
   const base = RAW_BASE_URL.replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;

@@ -3,7 +3,7 @@ import { MESSAGE_TYPES } from "../utils/constants";
 import { askRagStream } from "../Services/ragService";
 import { getNavigationRoot, getNavigationNext } from "../Services/navigationService";
 import { FLOW_TREE, resolveNodeByPath } from "../mocks/mockApiData";
-import { pingBackend } from "../Services/apiClient";
+import { pingBackend, buildUrl } from "../Services/apiClient";
 
 const ChatContext = createContext();
 const STORAGE_KEY = "buhoFis_chat_data";
@@ -36,12 +36,15 @@ const extractSources = (meta) => {
   const sources = payload?.sources ?? [];
   if (!Array.isArray(sources)) return [];
 
-  const nameFromUrl = (url) => {
+  // OpenAPI (RagSource): `file_id`, `file_name`, `chunk_index`, `score`.
+  // Mostrar por `file_name` pero acceder por `file_id`.
+  // El endpoint de archivos no está definido en el OpenAPI, por eso se deja configurable.
+  const FILES_PREFIX = (import.meta?.env?.VITE_FILES_ENDPOINT || "/files").replace(/\/+$/, "");
+
+  const buildFileUrlById = (fileId) => {
+    if (!fileId) return null;
     try {
-      const u = new URL(url);
-      const last = u.pathname.split("/").filter(Boolean).pop();
-      if (!last) return null;
-      return decodeURIComponent(last);
+      return buildUrl(`${FILES_PREFIX}/${encodeURIComponent(String(fileId))}`);
     } catch {
       return null;
     }
@@ -64,16 +67,19 @@ const extractSources = (meta) => {
         };
       }
 
-      const file_id = s?.file_id ?? s?.fileId ?? null;
-      const file_name = s?.file_name ?? s?.fileName ?? null;
-      const url = s?.url ?? s?.file_url ?? s?.fileUrl ?? null;
-      const chunk_index = s?.chunk_index ?? s?.chunkIndex ?? null;
+      const file_id = s?.file_id ?? null;
+      const file_name = s?.file_name ?? null;
+
+      // Si viene url explícita la usamos, si no construimos con file_id
+      const rawUrl = s?.url ?? null;
+      const url = rawUrl || buildFileUrlById(file_id);
+
+      const chunk_index = s?.chunk_index ?? null;
       const page = s?.page ?? null;
       const score = s?.score ?? null;
 
-      const derived = !file_name && url ? nameFromUrl(url) : null;
-      const display_name = (file_name || derived || file_id || "").toString().trim() || null;
-      const download_name = (file_name || derived || display_name || "documento").toString().trim() || "documento";
+      const display_name = (file_name || file_id || "").toString().trim() || null;
+      const download_name = (file_name || "documento").toString().trim() || "documento";
 
       return { file_id, file_name, url, chunk_index, page, score, display_name, download_name };
     })

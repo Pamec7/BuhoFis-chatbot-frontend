@@ -80,10 +80,12 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
 
   const lastMessageContent = messages[messages.length - 1]?.content;
 
+  // Auto-scroll SOLO si el usuario está cerca del final.
+  // Si el usuario sube mientras llega una respuesta (streaming), no lo forzamos a bajar.
   React.useLayoutEffect(() => {
     if (messages.length === 0) return;
-    if (isNearBottom || isTyping) scrollToBottom();
-  }, [messages.length, lastMessageContent, isTyping, isNearBottom, scrollToBottom]);
+    if (isNearBottom) scrollToBottom();
+  }, [messages.length, lastMessageContent, isNearBottom, scrollToBottom]);
 
   const showWelcome = messages.length === 0;
 
