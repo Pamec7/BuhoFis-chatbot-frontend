@@ -3,20 +3,10 @@ import { MESSAGE_TYPES } from "../utils/constants";
 import { askRagStream } from "../Services/ragService";
 import { getNavigationRoot, getNavigationNext } from "../Services/navigationService";
 import { FLOW_TREE, resolveNodeByPath } from "../mocks/mockApiData";
-import { pingBackend } from "../Services/apiClient";
+import { pingBackend, buildUrl } from "../Services/apiClient";
 
 const ChatContext = createContext();
 const STORAGE_KEY = "buhoFis_chat_data";
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").toString().trim().replace(/\/+$/, "");
-
-const buildBackendUrl = (path) => {
-  if (!path) return null;
-  const p = String(path);
-  if (/^https?:\/\//i.test(p)) return p;
-  if (!API_BASE) return p;
-  return API_BASE + (p.startsWith("/") ? p : `/${p}`);
-};
 
 const loadFromSessionStorage = () => {
   try {
@@ -46,6 +36,19 @@ const extractSources = (meta) => {
   const sources = payload?.sources ?? [];
   if (!Array.isArray(sources)) return [];
 
+  const FILES_PREFIX = (import.meta?.env?.VITE_FILES_ENDPOINT || "/files").replace(/\/+$/, "");
+
+  const buildFileUrlByName = (fileName) => {
+    if (!fileName || typeof fileName !== "string") return null;
+    const clean = fileName.trim();
+    if (!clean) return null;
+    try {
+      return buildUrl(`${FILES_PREFIX}/download/${encodeURIComponent(clean)}`);
+    } catch {
+      return null;
+    }
+  };
+
   const nameFromUrl = (url) => {
     try {
       const u = new URL(url);
@@ -57,22 +60,15 @@ const extractSources = (meta) => {
     }
   };
 
-  const buildDownloadUrlByName = (fileName) => {
-    const n = typeof fileName === "string" ? fileName.trim() : "";
-    if (!n) return null;
-    return buildBackendUrl(`/files/download/${encodeURIComponent(n)}`);
-  };
-
   return sources
     .map((s) => {
       if (typeof s === "string") {
         const fileName = s.trim();
         const display_name = fileName || null;
-        const url = buildDownloadUrlByName(fileName);
         return {
           file_id: null,
           file_name: fileName || null,
-          url,
+          url: buildFileUrlByName(fileName),
           chunk_index: null,
           page: null,
           score: null,
@@ -83,19 +79,19 @@ const extractSources = (meta) => {
 
       const file_id = s?.file_id ?? s?.fileId ?? null;
       const file_name = s?.file_name ?? s?.fileName ?? null;
-
-      const rawUrl = s?.url ?? s?.file_url ?? s?.fileUrl ?? null;
-      const url = rawUrl || buildDownloadUrlByName(file_name);
-
       const chunk_index = s?.chunk_index ?? s?.chunkIndex ?? null;
       const page = s?.page ?? null;
       const score = s?.score ?? null;
 
-      const derived = !file_name && url ? nameFromUrl(url) : null;
+      const rawUrl = s?.url ?? s?.file_url ?? s?.fileUrl ?? null;
+      const derived = !file_name && rawUrl ? nameFromUrl(rawUrl) : null;
+
+      const url = rawUrl || buildFileUrlByName(file_name || derived);
+
       const display_name = (file_name || derived || file_id || "").toString().trim() || null;
       const download_name = (file_name || derived || display_name || "documento").toString().trim() || "documento";
 
-      return { file_id, file_name, url, chunk_index, page, score, display_name, download_name };
+      return { file_id, file_name: file_name || derived || null, url, chunk_index, page, score, display_name, download_name };
     })
     .filter((x) => x.display_name || x.url);
 };
@@ -430,6 +426,8 @@ export function ChatProvider({ children }) {
             content: node.answer || "Listo.",
             timestamp: new Date(),
             fileName: hasFile ? fileName : null,
+            fileMissing: !hasFile,
+            fileMissingVariant: "warning",
           });
         } else {
           setFlowOptions(node.options || []);
@@ -588,7 +586,8 @@ export function ChatProvider({ children }) {
             const sources = extractSources(meta);
             if (!sources.length) return;
 
-            const key = (s) => `${s.file_name || ""}::${s.url || ""}::${s.chunk_index || ""}::${s.page || ""}`;
+            const key = (s) =>
+              `${s.file_id || ""}::${s.file_name || ""}::${s.url || ""}::${s.chunk_index || ""}::${s.page || ""}`;
 
             const merged = [...lastSources, ...sources];
             const uniq = [];
@@ -623,18 +622,13 @@ export function ChatProvider({ children }) {
             streamAbortRef.current = null;
             streamingBotIdRef.current = null;
 
-            const finalText = (fullAnswer || "").trimEnd();
-            const ensured = finalText.length ? finalText : "No se recibió una respuesta del servidor.";
-
             setIsTyping(false);
             setChats((prev) =>
               prev.map((chat) =>
                 chat.id === activeChat
                   ? {
                       ...chat,
-                      messages: chat.messages.map((m) =>
-                        m.id === botId ? { ...m, isStreaming: false, content: (m.content || "").trimEnd() || ensured, sources: lastSources } : m
-                      ),
+                      messages: chat.messages.map((m) => (m.id === botId ? { ...m, isStreaming: false, sources: lastSources } : m)),
                     }
                   : chat
               )
@@ -646,8 +640,6 @@ export function ChatProvider({ children }) {
             const currentBotId = streamingBotIdRef.current;
             streamingBotIdRef.current = null;
 
-            const finalText = (fullAnswer || "").trimEnd();
-
             setIsTyping(false);
             setChats((prev) =>
               prev.map((chat) =>
@@ -656,7 +648,7 @@ export function ChatProvider({ children }) {
                       ...chat,
                       messages: chat.messages.map((m) =>
                         m.id === currentBotId
-                          ? { ...m, isStreaming: false, content: (m.content || finalText || "").trimEnd(), sources: lastSources }
+                          ? { ...m, isStreaming: false, content: (m.content || fullAnswer || "").trimEnd(), sources: lastSources }
                           : m
                       ),
                     }
