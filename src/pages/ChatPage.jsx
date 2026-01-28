@@ -127,7 +127,7 @@ const ChatPage = ({ onNavigate, onNewChat }) => {
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-start pt-10 min-h-[460px]">
                   <div className="text-center mb-8 max-w-3xl">
                     <h2 className={`text-3xl md:text-4xl font-bold mb-4 ${isDarkMode ? "text-[#6EC971]" : "text-[#195427]"}`}>
-                      ¡Hola! Soy BuhoFIS, tu asistente virtual
+                      ¡Hola! Soy BuhoChat, tu asistente virtual
                       <br />
                       Estoy aquí para ayudarte
                     </h2>
