@@ -47,7 +47,7 @@ const LandingPage = ({ onNavigate }) => {
           </motion.div>
           
           <h1 className={`text-5xl font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-[#003D61]'}`}>
-            ¡Bienvenido al <span className={isDarkMode ? 'text-[#6EC971]' : 'text-[#0582ca87]'}>Asistente Virtual</span>
+            ¡Bienvenido al <span className={isDarkMode ? 'text-[#6EC971]' : 'text-[#0582ca87]'}>Chatbot</span>
           </h1>
           <h2 className={`text-3xl font-semibold mb-6 ${isDarkMode ? 'text-[#B3E5FC]' : 'text-[#084062]'}`}>
             de Ingeniería en Software y Computación!
@@ -64,7 +64,7 @@ const LandingPage = ({ onNavigate }) => {
           <button
             onClick={() => onNavigate('chat')}
             className={`${isDarkMode ? 'bg-gradient-to-r from-[#195427] to-[#2d7a47] hover:from-[#2d7a47] hover:to-[#195427]' : 'bg-gradient-to-r from-[#084062] to-[#0582CA] hover:from-[#0582CA] hover:to-[#084062]'} text-white px-8 py-3 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-offset-2 ${isDarkMode ? 'focus:ring-[#6EC971]' : 'focus:ring-[#0582CA]'} mb-12 md:mb-16`}
-            aria-label="Iniciar conversación con el asistente virtual"
+            aria-label="Iniciar conversación con el chatbot"
           >
             ¡EMPEZAR CONVERSACIÓN!
           </button>
