@@ -24,9 +24,8 @@ function sseResponseSynthethic({ question }) {
       const meta = {
         payload: {
           sources: [
-            "mock_doc_practicas.pdf",
-            "mock_doc_matricula.pdf",
-            "mock_doc_general.pdf",
+            "documento_ejemplo1.pdf",
+            "documento_ejemplo2.pdf",
           ],
         },
       };

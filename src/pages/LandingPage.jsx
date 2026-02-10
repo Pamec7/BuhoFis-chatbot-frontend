@@ -63,7 +63,7 @@ const LandingPage = ({ onNavigate }) => {
           />
           <button
             onClick={() => onNavigate('chat')}
-            className={`${isDarkMode ? 'bg-gradient-to-r from-[#195427] to-[#2d7a47] hover:from-[#2d7a47] hover:to-[#195427]' : 'bg-gradient-to-r from-[#084062] to-[#0582CA] hover:from-[#0582CA] hover:to-[#084062]'} text-white px-8 py-3 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-offset-2 ${isDarkMode ? 'focus:ring-[#6EC971]' : 'focus:ring-[#0582CA]'} mb-12 md:mb-16`}
+            className={`${isDarkMode ? 'bg-gradient-to-r from-[#34a94f] to-[#2d7a47] hover:from-[#2d7a47] hover:to-[#195427]' : 'bg-gradient-to-r from-[#195427] to-[#2d7a47] hover:from-[#2d7a47] hover:to-[#195427]'} text-white px-8 py-3 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-offset-2 ${isDarkMode ? 'focus:ring-[#6EC971]' : 'focus:ring-[#0582CA]'} mb-12 md:mb-16`}
             aria-label="Iniciar conversación con el chatbot"
           >
             ¡EMPEZAR CONVERSACIÓN!

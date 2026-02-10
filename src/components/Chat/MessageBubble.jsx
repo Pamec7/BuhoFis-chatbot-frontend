@@ -11,7 +11,7 @@ const badgeStyle = (variant, isDarkMode) => {
     return isDarkMode ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/30" : "bg-[#E3F2FD] text-[#003554] border border-[#0582CA]/25";
   }
   if (variant === "info") {
-    return isDarkMode ? "bg-blue-500/15 text-blue-200 border border-blue-500/30" : "bg-blue-50 text-blue-800 border border-blue-200";
+    return isDarkMode ? "bg-gray-700/90 text-blue-200 border border-white-500/30" : "bg-gray-300 text-blue-800 border border-black/20";
   }
   return "";
 };
@@ -40,20 +40,22 @@ const MessageBubble = ({ message }) => {
   const showFileMissing = message.type !== "user" && message.fileMissing && !safeFileName;
 
   const isAlert = message.type !== "user" && (message.variant === "error" || message.variant === "warning" || message.variant === "info");
+  const isInfo = message.type !== "user" && message.variant === "info";
   const AlertIcon = isAlert ? iconForVariant(message.variant) : null;
 
+  //Mensaje User - bot
   const bubbleClass =
     message.type === "user"
       ? isDarkMode
-        ? "bg-gradient-to-br from-[#195427] to-[#2d7a47]"
-        : "bg-gradient-to-br from-[#0582CA] to-[#084062]"
+        ? "bg-gradient-to-br from-[#1D6086] to-[#54A8D9]"
+        : "bg-gradient-to-br from-[#0b5e8e] to-[#54A8D9]"
       : isAlert
       ? badgeStyle(message.variant, isDarkMode)
       : isDarkMode
-      ? "bg-gradient-to-br from-[#0b5e8e] to-[#165177]"
+      ? "bg-gradient-to-br from-[#6CC185] to-[#6CC185]"
       : "bg-gradient-to-br from-[#93ebaf] to-[#95eec4]";
 
-  const textClass = message.type === "user" ? "text-white" : isAlert ? "" : isDarkMode ? "text-white" : "text-[#003D61]";
+  const textClass = message.type === "user" ? "text-white" : isAlert ? "" : isDarkMode ? "text-black" : "text-[#003D61]";
 
   const docMissingClass = isDarkMode ? "bg-yellow-500/10 text-yellow-200 border border-yellow-500/20" : "bg-white/60 text-[#003554] border border-black/10";
   const docMissingIconClass = isDarkMode ? "text-yellow-200" : "text-[#0582CA]";
@@ -92,12 +94,12 @@ const MessageBubble = ({ message }) => {
           <p className={`${textClass} text-base leading-relaxed whitespace-pre-wrap break-words overflow-wrap-anywhere`}>{message.content}</p>
 
           {message.detail ? (
-            <p className={`mt-2 text-xs ${isAlert ? "opacity-80" : isDarkMode ? "text-white/70" : "text-black/60"}`}>Detalle: {message.detail}</p>
+            <p className={`mt-2 text-xs ${isAlert ? "opacity-80" : isDarkMode ? "text-black/70" : "text-black/60"}`}>Detalle: {message.detail}</p>
           ) : null}
 
           {safeFileName && (
-            <p className={`mt-2 text-xs ${isDarkMode ? "text-[#B3E5FC]" : "text-[#003554]"}`}>
-              Documento asociado: <span className="font-semibold">{safeFileName}</span>
+            <p className={`mt-2 text-xs ${isDarkMode ? "text-[#003554]" : "text-[#003554]"}`}>
+              Documento asociado: [ejemplo] <span className="font-semibold">{safeFileName}</span>
             </p>
           )}
 
@@ -106,14 +108,14 @@ const MessageBubble = ({ message }) => {
               <AlertTriangle size={16} className={`mt-0.5 ${docMissingIconClass}`} />
               <div className="text-xs leading-snug">
                 <p className="font-semibold">Documento no disponible</p>
-                <p>El backend no envió el archivo asociado. Puede que aún no esté subido o hubo un error de conexión.</p>
+                <p>El backend no envió el archivo asociado a la petición. Puede que aún no esté subido o hubo un error de conexión.</p>
               </div>
             </div>
           )}
 
           {message.type !== "user" && sources.length > 0 && (
             <div className={`mt-3 rounded-xl p-3 ${isDarkMode ? "bg-white/10" : "bg-black/5"}`}>
-              <p className={`text-xs font-semibold ${isDarkMode ? "text-[#B3E5FC]" : "text-[#003554]"}`}>Fuentes / Documentos:</p>
+              <p className={`text-xs font-semibold ${isDarkMode ? "text-[#003554]" : "text-[#003554]"}`}>Fuentes / Documentos:</p>
 
               <ul className="mt-2 space-y-2">
                 {sources.slice(0, 6).map((s, idx) => {
@@ -131,7 +133,7 @@ const MessageBubble = ({ message }) => {
 
                   return (
                     <li key={key} className="flex items-center justify-between gap-3">
-                      <span className={`text-xs ${isDarkMode ? "text-white/90" : "text-[#003D61]"}`}>
+                      <span className={`text-xs ${isDarkMode ? "text-[#34596F]/90" : "text-[#003D61]"}`}>
                         {label}
                         {extra}
                       </span>
@@ -143,7 +145,7 @@ const MessageBubble = ({ message }) => {
                               type="button"
                               onClick={() => downloadFile(s.url, downloadName, key)}
                               disabled={downloadingKey === key}
-                              className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-[#CCFFCE]" : "text-[#084062]"} hover:underline disabled:opacity-60`}
+                              className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-[#34596F]" : "text-[#084062]"} hover:underline disabled:opacity-60`}
                             >
                               {downloadingKey === key ? "Descargando..." : "Descargar"} <Download size={14} />
                             </button>
@@ -152,7 +154,7 @@ const MessageBubble = ({ message }) => {
                               href={s.url}
                               target="_blank"
                               rel="noreferrer"
-                              className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-[#CCFFCE]" : "text-[#084062]"} hover:underline`}
+                              className={`text-xs flex items-center gap-1 ${isDarkMode ? "text-[#34596F]" : "text-[#084062]"} hover:underline`}
                             >
                               Abrir <ExternalLink size={14} />
                             </a>
@@ -168,19 +170,27 @@ const MessageBubble = ({ message }) => {
             </div>
           )}
 
-          <div className="flex justify-between items-center mt-3">
-            <button
-              onClick={copyToClipboard}
-              className={`${isDarkMode ? "hover:bg-white/10" : "hover:bg-black/10"} p-2 rounded-lg transition-all focus:outline-none focus:ring-2 ${
-                isDarkMode ? "focus:ring-[#6EC971]" : "focus:ring-[#0582CA]"
-              }`}
-              aria-label="Copiar mensaje"
-              type="button"
-            >
-              <Copy size={16} className={isDarkMode ? "text-[#CCFFCE]" : "text-[#003554]"} />
-            </button>
+          <div
+  className={`flex items-center mt-3 ${
+    isAlert ? "justify-end" : "justify-between"
+  }`}
+>
 
-            <div className={`text-xs ${message.type === "user" ? "text-white/70" : isDarkMode ? "text-white/70" : "text-black/60"}`}>
+            {!isAlert && (
+  <button
+    onClick={copyToClipboard}
+    className={`${isDarkMode ? "hover:bg-white/10" : "hover:bg-black/10"} p-2 rounded-lg transition-all focus:outline-none focus:ring-2 ${
+      isDarkMode ? "focus:ring-[#6EC971]" : "focus:ring-[#0582CA]"
+    }`}
+    aria-label="Copiar mensaje"
+    type="button"
+  >
+    <Copy size={16} className={isDarkMode ? "text-[#003554]" : "text-[#003554]"} />
+  </button>
+)}
+
+
+            <div className={`text-xs ${ isInfo && isDarkMode ? "text-white/70" : isDarkMode ? "text-black/70" : "text-black/60"}`}>
               {message.timestamp?.toLocaleTimeString?.([], { hour: "2-digit", minute: "2-digit" })}
             </div>
           </div>

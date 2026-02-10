@@ -208,8 +208,7 @@ export function ChatProvider({ children }) {
       type: MESSAGE_TYPES.BOT,
       variant: "info",
       title: "Modo sin conexión",
-      content:
-        "Estoy teniendo problemas para conectar con el backend.\nMientras tanto, usaré respuestas de demostración para que el chat siga funcionando.",
+      content:"La información completa no está disponible por ahora.\nTe mostraré respuestas temporales mientras el sistema se prepara.",
       timestamp: new Date(),
     });
   }, [addMessage]);
@@ -222,16 +221,15 @@ export function ChatProvider({ children }) {
     ({ question, botId }) => {
       const tokens = [
         `Respuesta simulada para: "${question}". `,
-        "Este es un ejemplo. ",
-        "Cuando el backend esté disponible, la respuesta vendrá del RAG.",
+        "Esta respuesta es temporal.",
+        "Cuando el sistema esté completamente disponible, recibirás información más precisa.”",
       ];
 
       const meta = {
         payload: {
           sources: [
-            { file_name: "mock_doc_practicas.pdf", chunk_index: 1, score: 0.6, file_id: "mock-1" },
-            { file_name: "mock_doc_matricula.pdf", chunk_index: 2, score: 0.55, file_id: "mock-2" },
-            { file_name: "mock_doc_general.pdf", chunk_index: 1, score: 0.52, file_id: "mock-3" },
+            { file_name: "documento_ejemplo1.pdf", chunk_index: 1, score: 0.6, file_id: "mock-1" },
+            { file_name: "documento_ejemplo2.pdf", chunk_index: 2, score: 0.55, file_id: "mock-2" },
           ],
         },
       };

@@ -24,7 +24,7 @@ export const FLOW_TREE = {
           options: [
             { id: "horas", label: "¿Cuántas horas de prácticas necesito?" },
             { id: "registro", label: "¿Cómo registro mis prácticas?" },
-            { id: "formatos", label: "Formatos y documentos (PDF)" },
+            { id: "formatos", label: "Formatos y documentos" },
           ],
           children: {
             horas: {
