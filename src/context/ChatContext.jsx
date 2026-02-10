@@ -581,30 +581,31 @@ export function ChatProvider({ children }) {
         content,
         {
           onMetadata: (meta) => {
-            const sources = extractSources(meta);
-            if (!sources.length) return;
+            // const sources = extractSources(meta);
+            // if (!sources.length) return;
 
-            const key = (s) =>
-              `${s.file_id || ""}::${s.file_name || ""}::${s.url || ""}::${s.chunk_index || ""}::${s.page || ""}`;
+            // const key = (s) =>
+            //   `${s.file_id || ""}::${s.file_name || ""}::${s.url || ""}::${s.chunk_index || ""}::${s.page || ""}`;
 
-            const merged = [...lastSources, ...sources];
-            const uniq = [];
-            const seen = new Set();
-            for (const s of merged) {
-              const k = key(s);
-              if (seen.has(k)) continue;
-              seen.add(k);
-              uniq.push(s);
-            }
-            lastSources = uniq;
+            // const merged = [...lastSources, ...sources];
+            // const uniq = [];
+            // const seen = new Set();
+            // for (const s of merged) {
+            //   const k = key(s);
+            //   if (seen.has(k)) continue;
+            //   seen.add(k);
+            //   uniq.push(s);
+            // }
+            // lastSources = uniq;
 
-            setChats((prev) =>
-              prev.map((chat) =>
-                chat.id === activeChat
-                  ? { ...chat, messages: chat.messages.map((m) => (m.id === botId ? { ...m, sources: lastSources } : m)) }
-                  : chat
-              )
-            );
+            // setChats((prev) =>
+            //   prev.map((chat) =>
+            //     chat.id === activeChat
+            //       ? { ...chat, messages: chat.messages.map((m) => (m.id === botId ? { ...m, sources: lastSources } : m)) }
+            //       : chat
+            //   )
+            // );
+            return;
           },
           onMessage: (fragment) => {
             fullAnswer += fragment;
@@ -670,9 +671,13 @@ export function ChatProvider({ children }) {
                     : chat
                 )
               );
+              if (isNetwork) {
+  console.log("Esperando backend, no usar mock...");
+  return;
+}
 
-              startMockRagStream({ question: content, botId });
-              return;
+              //startMockRagStream({ question: content, botId });
+              //return;
             }
 
             setIsTyping(false);

@@ -8,7 +8,7 @@ const badgeStyle = (variant, isDarkMode) => {
     return isDarkMode ? "bg-red-500/15 text-red-200 border border-red-500/30" : "bg-red-50 text-red-800 border border-red-200";
   }
   if (variant === "warning") {
-    return isDarkMode ? "bg-yellow-500/15 text-yellow-200 border border-yellow-500/30" : "bg-[#E3F2FD] text-[#003554] border border-[#0582CA]/25";
+    return isDarkMode ? "bg-yellow/15 text-yellow-200 border border-yellow-500/30" : "bg-[#E3F2FD] text-[#003554] border border-[#0582CA]/25";
   }
   if (variant === "info") {
     return isDarkMode ? "bg-gray-700/90 text-blue-200 border border-white-500/30" : "bg-gray-300 text-blue-800 border border-black/20";
@@ -34,10 +34,10 @@ const MessageBubble = ({ message }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const safeFileName = typeof message.fileName === "string" && message.fileName.trim().length > 0 ? message.fileName.trim() : null;
+  //const safeFileName = typeof message.fileName === "string" && message.fileName.trim().length > 0 ? message.fileName.trim() : null;
 
-  const sources = Array.isArray(message.sources) ? message.sources : [];
-  const showFileMissing = message.type !== "user" && message.fileMissing && !safeFileName;
+  //const sources = Array.isArray(message.sources) ? message.sources : [];
+  //const showFileMissing = message.type !== "user" && message.fileMissing && !safeFileName && sources.length === 0;
 
   const isAlert = message.type !== "user" && (message.variant === "error" || message.variant === "warning" || message.variant === "info");
   const isInfo = message.type !== "user" && message.variant === "info";
@@ -57,10 +57,10 @@ const MessageBubble = ({ message }) => {
 
   const textClass = message.type === "user" ? "text-white" : isAlert ? "" : isDarkMode ? "text-black" : "text-[#003D61]";
 
-  const docMissingClass = isDarkMode ? "bg-yellow-500/10 text-yellow-200 border border-yellow-500/20" : "bg-white/60 text-[#003554] border border-black/10";
-  const docMissingIconClass = isDarkMode ? "text-yellow-200" : "text-[#0582CA]";
+  const docMissingClass = isDarkMode ? "bg-white/60 text-white-200 border border-white-500/20" : "bg-white/60 text-[#003554] border border-black/10";
+  const docMissingIconClass = isDarkMode ? "text-black-200" : "text-[#0582CA]";//icon
 
-  const downloadFile = async (url, filename, key) => {
+  /*const downloadFile = async (url, filename, key) => {
     if (!url) return;
     setDownloadingKey(key);
     try {
@@ -79,7 +79,7 @@ const MessageBubble = ({ message }) => {
       setDownloadingKey(null);
     }
   };
-
+*/
   return (
     <>
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`} tabIndex={0} role="article">
@@ -97,23 +97,23 @@ const MessageBubble = ({ message }) => {
             <p className={`mt-2 text-xs ${isAlert ? "opacity-80" : isDarkMode ? "text-black/70" : "text-black/60"}`}>Detalle: {message.detail}</p>
           ) : null}
 
-          {safeFileName && (
+          {/*safeFileName && (
             <p className={`mt-2 text-xs ${isDarkMode ? "text-[#003554]" : "text-[#003554]"}`}>
               Documento asociado: [ejemplo] <span className="font-semibold">{safeFileName}</span>
             </p>
-          )}
+          )*/}
 
-          {showFileMissing && (
+          {/*showFileMissing && (
             <div className={`mt-3 rounded-xl p-3 flex items-start gap-2 ${docMissingClass}`} role="status" aria-live="polite">
               <AlertTriangle size={16} className={`mt-0.5 ${docMissingIconClass}`} />
               <div className="text-xs leading-snug">
                 <p className="font-semibold">Documento no disponible</p>
-                <p>El backend no envió el archivo asociado a la petición. Puede que aún no esté subido o hubo un error de conexión.</p>
+                <p>No se encontró el archivo asociado a la petición. Intentelo de nuevo más tarde.</p>
               </div>
             </div>
-          )}
+          )*/}
 
-          {message.type !== "user" && sources.length > 0 && (
+          {/*message.type !== "user" && sources.length > 0 && (
             <div className={`mt-3 rounded-xl p-3 ${isDarkMode ? "bg-white/10" : "bg-black/5"}`}>
               <p className={`text-xs font-semibold ${isDarkMode ? "text-[#003554]" : "text-[#003554]"}`}>Fuentes / Documentos:</p>
 
@@ -168,7 +168,7 @@ const MessageBubble = ({ message }) => {
 
               {sources.length > 6 && <p className={`mt-2 text-[11px] ${isDarkMode ? "text-white/60" : "text-black/50"}`}>+{sources.length - 6} fuentes más</p>}
             </div>
-          )}
+          )*/}
 
           <div
   className={`flex items-center mt-3 ${

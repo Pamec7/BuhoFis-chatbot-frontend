@@ -20,22 +20,22 @@ function sseResponseSynthethic({ question }) {
         "La respuesta vendrá del RAG cuando se haya establecido conexión con Backend.",
       ];
 
-      // metadata fake
-      const meta = {
-        payload: {
-          sources: [
-            "documento_ejemplo1.pdf",
-            "documento_ejemplo2.pdf",
-          ],
-        },
-      };
+      // // metadata fake
+      // const meta = {
+      //   payload: {
+      //     sources: [
+      //       "documento_ejemplo1.pdf",
+      //       "documento_ejemplo2.pdf",
+      //     ],
+      //   },
+      // };
 
-      // Enviar metadata
-      controller.enqueue(
-        encoder.encode(
-          `event: metadata\ndata: ${JSON.stringify(meta)}\n\n`
-        )
-      );
+      // // Enviar metadata
+      // controller.enqueue(
+      //   encoder.encode(
+      //     `event: metadata\ndata: ${JSON.stringify(meta)}\n\n`
+      //   )
+      // );
 
       let i = 0;
       const interval = setInterval(() => {
@@ -110,7 +110,7 @@ export function enableMockApi() {
         const q = body.question || "Pregunta";
         return jsonResponse({
           answer: `Respuesta simulada (no streaming) para: "${q}"`,
-          sources: ["mock_source_1.pdf", "mock_source_2.pdf"],
+          //sources: ["mock_source_1.pdf", "mock_source_2.pdf"],
         });
       } catch (e) {
         return jsonResponse({ error: "Bad request (mock)" }, 400);
@@ -130,7 +130,7 @@ export function enableMockApi() {
       }
     }
 
-    // Si no coincide nada → fetch real
+ 
     return originalFetch(url, options);
   };
 }
