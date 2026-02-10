@@ -36,7 +36,7 @@ const FlowOptionsBar = ({
     : "bg-gradient-to-r from-[#195427] to-[#2d7a47] text-white hover:from-[#2d7a47] hover:to-[#195427] border-[#195427]/10";
 
   const optionChip = isDarkMode
-    ? "bg-[#CCFFCE] text-[#001a2e] hover:bg-[#B3E5FC] border border-white/10 shadow-[0_10px_18px_rgba(0,0,0,0.28)] disabled:opacity-50"
+    ? "bg-white/80 text-[#001a2e] hover:bg-[#B3E5FC] border border-[#0582CA]/60 shadow-[0_10px_18px_rgba(0,0,0,0.28)] disabled:opacity-50"
     : "bg-white text-[#003554] hover:bg-[#E3F2FD] border border-[#0582CA]/45 shadow-[0_10px_18px_rgba(0,0,0,0.10)] disabled:opacity-50";
 
   const statusBadgeBase = "text-[11px] px-2.5 py-1 rounded-full border flex items-center gap-2 shadow-sm";
